@@ -15,6 +15,8 @@ def img2img(prompt: str, negative_prompt: str, prompt_style: str, prompt_style2:
     is_inpaint = mode == 1
     is_upscale = mode == 2
 
+    print("IMG2IMG", prompt, mode)
+
     if is_inpaint:
         if mask_mode == 0:
             image = init_img_with_mask['image']

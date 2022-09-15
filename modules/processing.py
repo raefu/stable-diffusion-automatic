@@ -289,7 +289,7 @@ def process_images(p: StableDiffusionProcessing, opts=opts) -> Processed:
 
                     devices.torch_gc()
 
-                    x_sample = modules.face_restoration.restore_faces(x_sample)
+                    x_sample = modules.face_restoration.restore_faces(x_sample, opts)
 
                 image = Image.fromarray(x_sample)
 

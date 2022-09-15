@@ -41,14 +41,14 @@ def gfpgan():
     return model
 
 
-def gfpgan_fix_faces(np_image):
+def gfpgan_fix_faces(np_image, opts=shared.opts):
     model = gfpgan()
 
     np_image_bgr = np_image[:, :, ::-1]
     cropped_faces, restored_faces, gfpgan_output_bgr = model.enhance(np_image_bgr, has_aligned=False, only_center_face=False, paste_back=True)
     np_image = gfpgan_output_bgr[:, :, ::-1]
 
-    if shared.opts.face_restoration_unload:
+    if opts.face_restoration_unload:
         model.gfpgan.to(devices.cpu)
 
     return np_image
@@ -75,7 +75,7 @@ def setup_gfpgan():
             def name(self):
                 return "GFPGAN"
 
-            def restore(self, np_image):
+            def restore(self, np_image, opts=None):
                 np_image_bgr = np_image[:, :, ::-1]
                 cropped_faces, restored_faces, gfpgan_output_bgr = gfpgan().enhance(np_image_bgr, has_aligned=False, only_center_face=False, paste_back=True)
                 np_image = gfpgan_output_bgr[:, :, ::-1]

@@ -8,7 +8,6 @@ from PIL import Image
 
 import modules.esrgam_model_arch as arch
 from modules import shared
-from modules.shared import opts
 from modules.devices import has_mps
 import modules.images
 
@@ -91,7 +90,7 @@ def upscale_without_tiling(model, img):
     return Image.fromarray(output, 'RGB')
 
 
-def esrgan_upscale(model, img):
+def esrgan_upscale(model, img, opts):
     if opts.ESRGAN_tile == 0:
         return upscale_without_tiling(model, img)
 
@@ -120,9 +119,9 @@ class UpscalerESRGAN(modules.images.Upscaler):
         self.name = title
         self.model = load_model(filename)
 
-    def do_upscale(self, img):
+    def do_upscale(self, img, opts=shared.opts):
         model = self.model.to(shared.device)
-        img = esrgan_upscale(model, img)
+        img = esrgan_upscale(model, img, opts)
         return img
 
 

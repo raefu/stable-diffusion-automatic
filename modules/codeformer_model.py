@@ -21,6 +21,8 @@ have_codeformer = False
 codeformer = None
 
 def setup_codeformer():
+    return
+
     path = modules.paths.paths.get("CodeFormer", None)
     if path is None:
         return
@@ -68,7 +70,7 @@ def setup_codeformer():
 
                 return net, face_helper
 
-            def restore(self, np_image, w=None):
+            def restore(self, np_image, w=None, opts=shared.opts):
                 np_image = np_image[:, :, ::-1]
 
                 original_resolution = np_image.shape[0:2]
@@ -86,7 +88,7 @@ def setup_codeformer():
 
                     try:
                         with torch.no_grad():
-                            output = self.net(cropped_face_t, w=w if w is not None else shared.opts.code_former_weight, adain=True)[0]
+                            output = self.net(cropped_face_t, w=w if w is not None else opts.code_former_weight, adain=True)[0]
                             restored_face = tensor2img(output, rgb2bgr=True, min_max=(-1, 1))
                         del output
                         torch.cuda.empty_cache()
@@ -105,7 +107,7 @@ def setup_codeformer():
                 if original_resolution != restored_img.shape[0:2]:
                     restored_img = cv2.resize(restored_img, (0, 0), fx=original_resolution[1]/restored_img.shape[1], fy=original_resolution[0]/restored_img.shape[0], interpolation=cv2.INTER_LINEAR)
 
-                if shared.opts.face_restoration_unload:
+                if opts.face_restoration_unload:
                     self.net.to(devices.cpu)
 
                 return restored_img
