@@ -24,6 +24,7 @@ import modules.extras
 import modules.lowvram
 import modules.txt2img
 import modules.img2img
+import modules.rpc
 
 
 modules.codeformer_model.setup_codeformer()
@@ -124,7 +125,7 @@ def webui():
         run_pnginfo=modules.extras.run_pnginfo
     )
 
-    demo.queue()
+    modules.rpc.start()
 
     demo.launch(
         share=cmd_opts.share,

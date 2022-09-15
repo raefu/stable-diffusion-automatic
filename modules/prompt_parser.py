@@ -112,8 +112,6 @@ def split_weighted_subprompts(input_string, normalize=True):
         normalize = False
     if not normalize:
         return parsed_prompts
-    print("hrmery", [input_string], '\n'.join(f'{weight} x {prompt}'
-                        for prompt, weight in parsed_prompts))
     weight_sum = sum(x[1] for x in parsed_prompts)
     if weight_sum == 0:
         print(
