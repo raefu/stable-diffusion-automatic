@@ -124,6 +124,8 @@ def webui():
         run_pnginfo=modules.extras.run_pnginfo
     )
 
+    demo.queue()
+
     demo.launch(
         share=cmd_opts.share,
         server_name="0.0.0.0" if cmd_opts.listen else None,
