@@ -39,6 +39,7 @@ device_codeformer = cpu if has_mps else device
 
 def randn(seed, shape):
     # Pytorch currently doesn't handle setting randomness correctly when the metal backend is used.
+    # TODO: implement CUDA-style xorwow RNG for any non-CUDA host for determinism
     if device.type == 'mps':
         generator = torch.Generator(device=cpu)
         generator.manual_seed(seed)

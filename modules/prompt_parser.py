@@ -81,6 +81,49 @@ def get_learned_conditioning_prompt_schedules(prompts, steps):
 
     return res
 
+weighted_prompt_parser = re.compile(
+    """
+    (?P<prompt>     # capture group for 'prompt'
+    (?:\\\:|[^:])+  # match one or more non ':' characters or escaped colons '\:'
+    )               # end 'prompt'
+    (?:             # non-capture group
+    :+              # match one or more ':' characters
+    (?P<weight>     # capture group for 'weight'
+    -?\d+(?:\.\d+)? # match positive or negative integer or decimal number
+    )?              # end weight capture group, make optional
+    \s*             # strip spaces after weight
+    |               # OR
+    $               # else, if no ':' then match end of line
+    )               # end non-capture group
+""", re.VERBOSE)
+
+# grabs all text up to the first occurrence of ':' as sub-prompt
+# takes the value following ':' as weight
+# if ':' has no value defined, defaults to 1.0
+# repeats until no text remaining
+def split_weighted_subprompts(input_string, normalize=True):
+    parsed_prompts = [(match.group("prompt").replace("\\:", ":"),
+                       float(match.group("weight") or 1))
+                      for match in re.finditer(weighted_prompt_parser, input_string)]
+    if not input_string:
+        return []
+    if any(x[1] <= 0 for x in parsed_prompts):
+        # normalization with negative weights doesn't make sense
+        normalize = False
+    if not normalize:
+        return parsed_prompts
+    print("hrmery", [input_string], '\n'.join(f'{weight} x {prompt}'
+                        for prompt, weight in parsed_prompts))
+    weight_sum = sum(x[1] for x in parsed_prompts)
+    if weight_sum == 0:
+        print(
+            "Warning: Subprompt weights add up to zero. Discarding and using even weights instead."
+        )
+        equal_weight = 1 / (len(parsed_prompts) or 1)
+        return [(x[0], equal_weight) for x in parsed_prompts]
+    if len(parsed_prompts) > 1:
+        print('\n'.join(f'{weight / weight_sum} x {prompt}' for prompt, weight in parsed_prompts))
+    return [(x[0], x[1] / weight_sum) for x in parsed_prompts]
 
 ScheduledPromptConditioning = namedtuple("ScheduledPromptConditioning", ["end_at_step", "cond"])
 ScheduledPromptBatch = namedtuple("ScheduledPromptBatch", ["shape", "schedules"])
@@ -101,7 +144,21 @@ def get_learned_conditioning(prompts, steps):
             continue
 
         texts = [x[1] for x in prompt_schedule]
-        conds = shared.sd_model.get_learned_conditioning(texts)
+        conds = []
+
+        for text in texts:
+            weighted_subprompts = split_weighted_subprompts(text)
+            if len(weighted_subprompts) <= 1:
+                c = shared.sd_model.get_learned_conditioning([text])
+            else:
+                c = None
+                for subtext, subweight in weighted_subprompts:
+                    if c is None:
+                        c = shared.sd_model.get_learned_conditioning([subtext])
+                        c *= subweight
+                    else:
+                        c.add(shared.sd_model.get_learned_conditioning([subtext]), alpha=subweight)
+            conds.append(c[0])
 
         cond_schedule = []
         for i, (end_at_step, text) in enumerate(prompt_schedule):
