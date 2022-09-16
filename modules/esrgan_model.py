@@ -7,14 +7,13 @@ import torch
 from PIL import Image
 
 import modules.esrgam_model_arch as arch
-from modules import shared
-from modules.devices import has_mps
+from modules import shared, devices
 import modules.images
 
 
 def load_model(filename):
     # this code is adapted from https://github.com/xinntao/ESRGAN
-    pretrained_net = torch.load(filename, map_location='cpu' if has_mps else None)
+    pretrained_net = torch.load(filename, map_location='cpu' if devices.has_mps else None)
     crt_model = arch.RRDBNet(3, 3, 64, 23, gc=32)
 
     if 'conv_first.weight' in pretrained_net:
@@ -122,6 +121,8 @@ class UpscalerESRGAN(modules.images.Upscaler):
     def do_upscale(self, img, opts=shared.opts):
         model = self.model.to(shared.device)
         img = esrgan_upscale(model, img, opts)
+        if opts.face_restoration_unload:
+            model.to(devices.cpu)
         return img
 
 
