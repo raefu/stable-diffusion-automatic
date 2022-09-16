@@ -314,6 +314,7 @@ def process_images(p: StableDiffusionProcessing, opts=opts) -> Processed:
                     images.save_image(image, p.outpath_samples, "", seeds[i], prompts[i], opts.samples_format, info=infotext(n, i), p=p)
 
                 output_images.append(image)
+                devices.torch_gc()
 
             state.nextjob()
 
