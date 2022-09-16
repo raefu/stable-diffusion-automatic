@@ -5,8 +5,9 @@ import time
 
 import zerorpc
 
+import modules.sd_hijack
 from modules.processing import StableDiffusionProcessing, Processed, StableDiffusionProcessingTxt2Img, process_images
-from modules import shared, processing, sd_samplers as samplers, memmonitor, img2img
+from modules import shared, processing, sd_samplers as samplers, memmonitor, img2img, devices
 i2i_argnames = frozenset(inspect.getfullargspec(img2img.img2img)[0])
 
 class SDRPCServer():
@@ -14,8 +15,20 @@ class SDRPCServer():
         sampler_to_index = {s.name.lower(): n for n, s in enumerate(samplers.samplers)}
         upscaler_to_index = {s.name.lower(): n for n, s in enumerate(shared.sd_upscalers)}
 
+        model_req = opts.pop('model', 'model')
+        model_req = {'waifu': 'wd-v1-2-full-ema-pruned'}.get(model_req, model_req)
+        model = shared.sd_models[model_req]
+
+        for other_model in shared.sd_models.values():
+            if other_model.model_hash != model.model_hash:
+                other_model.to(devices.cpu)
+        devices.torch_gc()
+        model.to(shared.device)
+        modules.sd_hijack.model_hijack.hijack(model)
+
+
         p = StableDiffusionProcessingTxt2Img(
-            sd_model=shared.sd_model,
+            sd_model=model,
             outpath_samples=".",
             outpath_grids=".",
             prompt=opts.pop('prompt', ''),
@@ -93,6 +106,7 @@ class SDRPCServer():
         ret['images'] = images
         ret['elapsed'] = time.time() - start
         ret['vram_used'], ret['vram_total'] = monitor.read()
+        ret['model_hash'] = model.model_hash
         if '\n\n' in ret['info']:
             ret['warn'] = ret.pop('info').split('\n\n', 1)[1]
         for k in ('prompt', 'info', 'negative_prompt'):

@@ -212,7 +212,7 @@ def process_images(p: StableDiffusionProcessing, opts=opts) -> Processed:
             "Seed": all_seeds[index],
             "Face restoration": (opts.face_restoration_model if p.restore_faces else None),
             "Size": f"{p.width}x{p.height}",
-            "Model hash": (None if not opts.add_model_hash_to_info or not shared.sd_model_hash else shared.sd_model_hash),
+            "Model hash": (None if not opts.add_model_hash_to_info or not p.sd_model.model_hash else p.sd_model.model_hash),
             "Batch size": (None if p.batch_size < 2 else p.batch_size),
             "Batch pos": (None if p.batch_size < 2 else position_in_batch),
             "Variation seed": (None if p.subseed_strength == 0 else all_subseeds[index]),
@@ -252,8 +252,8 @@ def process_images(p: StableDiffusionProcessing, opts=opts) -> Processed:
 
             #uc = p.sd_model.get_learned_conditioning(len(prompts) * [p.negative_prompt])
             #c = p.sd_model.get_learned_conditioning(prompts)
-            uc = prompt_parser.get_learned_conditioning(len(prompts) * [p.negative_prompt], p.steps)
-            c = prompt_parser.get_learned_conditioning(prompts, p.steps)
+            uc = prompt_parser.get_learned_conditioning(p.sd_model, len(prompts) * [p.negative_prompt], p.steps)
+            c = prompt_parser.get_learned_conditioning(p.sd_model, prompts, p.steps)
 
             if len(model_hijack.comments) > 0:
                 for comment in model_hijack.comments:

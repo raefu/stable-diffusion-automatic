@@ -238,10 +238,10 @@ class StableDiffusionModelHijack:
         print(f"Loaded a total of {len(self.word_embeddings)} text inversion embeddings.")
 
     def hijack(self, m):
-        model_embeddings = m.cond_stage_model.transformer.text_model.embeddings
-
-        model_embeddings.token_embedding = EmbeddingsWithFixes(model_embeddings.token_embedding, self)
-        m.cond_stage_model = FrozenCLIPEmbedderWithCustomWords(m.cond_stage_model, self)
+        if not isinstance(m.cond_stage_model, FrozenCLIPEmbedderWithCustomWords):
+            model_embeddings = m.cond_stage_model.transformer.text_model.embeddings
+            model_embeddings.token_embedding = EmbeddingsWithFixes(model_embeddings.token_embedding, self)
+            m.cond_stage_model = FrozenCLIPEmbedderWithCustomWords(m.cond_stage_model, self)
 
         if cmd_opts.opt_split_attention:
             ldm.modules.attention.CrossAttention.forward = split_cross_attention_forward

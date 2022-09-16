@@ -127,7 +127,7 @@ ScheduledPromptConditioning = namedtuple("ScheduledPromptConditioning", ["end_at
 ScheduledPromptBatch = namedtuple("ScheduledPromptBatch", ["shape", "schedules"])
 
 
-def get_learned_conditioning(prompts, steps):
+def get_learned_conditioning(model, prompts, steps):
 
     res = []
 
@@ -147,15 +147,15 @@ def get_learned_conditioning(prompts, steps):
         for text in texts:
             weighted_subprompts = split_weighted_subprompts(text)
             if len(weighted_subprompts) <= 1:
-                c = shared.sd_model.get_learned_conditioning([text])
+                c = model.get_learned_conditioning([text])
             else:
                 c = None
                 for subtext, subweight in weighted_subprompts:
                     if c is None:
-                        c = shared.sd_model.get_learned_conditioning([subtext])
+                        c = model.get_learned_conditioning([subtext])
                         c *= subweight
                     else:
-                        c.add(shared.sd_model.get_learned_conditioning([subtext]), alpha=subweight)
+                        c.add(model.get_learned_conditioning([subtext]), alpha=subweight)
             conds.append(c[0])
 
         cond_schedule = []
