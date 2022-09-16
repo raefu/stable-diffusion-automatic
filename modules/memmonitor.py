@@ -1,18 +1,18 @@
 import threading
 import os
 import pynvml
+import time
 
 class MemUsageMonitor(threading.Thread):
     stop_flag = False
     max_usage = 0
     total = -1
 
-    def __init__(self, name):
+    def __init__(self):
         threading.Thread.__init__(self)
-        self.name = name
 
     def run(self):
-        print(f"[{self.name}] Recording max memory usage...\n")
+        print(f"Recording max memory usage...\n")
         # check if we're using a scoped-down GPU environment (pynvml does not listen to CUDA_VISIBLE_DEVICES)
         # so that we can measure memory on the correct GPU
         try:
@@ -25,16 +25,16 @@ class MemUsageMonitor(threading.Thread):
                 print("[MemMon][WARNING]", pynvmlHandleError)
                 print(
                     "[MemMon][INFO]",
-                    "defaulting to monitoring memory on the default gpu (set via --gpu flag)"
+                    "defaulting to monitoring memory on gpu 0 (use CUDA_VISIBLE_DEVICES to override)"
                 )
-            handle = pynvml.nvmlDeviceGetHandleByIndex(opt.gpu)
+            handle = pynvml.nvmlDeviceGetHandleByIndex(0)
         self.total = pynvml.nvmlDeviceGetMemoryInfo(handle).total
         while not self.stop_flag:
             m = pynvml.nvmlDeviceGetMemoryInfo(handle)
             self.max_usage = max(self.max_usage, m.used)
             # print(self.max_usage)
             time.sleep(0.1)
-        print(f"[{self.name}] Stopped recording.\n")
+        print(f"Stopped recording.\n")
 
     def read(self):
         return self.max_usage, self.total
@@ -51,7 +51,7 @@ try:
 except Exception:
     print(f"Unable to initialize NVIDIA management. No memory stats.")
     class MemUsageMonitor(threading.Thread):
-        def run(self):
+        def start(self):
             return
         def stop(self):
             return

@@ -57,7 +57,7 @@ class SDRPCServer():
         monitor = memmonitor.MemUsageMonitor()
         processed2 = None
         try:
-            monitor.run()
+            monitor.start()
             processed = process_images(p)
             if upscale:
                 # gross way to not have to respecify every arg
