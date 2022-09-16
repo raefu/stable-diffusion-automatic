@@ -8,9 +8,12 @@ import zerorpc
 import modules.sd_hijack
 from modules.processing import StableDiffusionProcessing, Processed, StableDiffusionProcessingTxt2Img, process_images
 from modules import shared, processing, sd_samplers as samplers, memmonitor, img2img, devices
-i2i_argnames = frozenset(inspect.getfullargspec(img2img.img2img)[0])
 
 class SDRPCServer():
+    def __init__(self):
+        i2i_sig = inspect.getfullargspec(img2img.img2img)
+        self.i2i_argnames = frozenset(i2i_sig.args + i2i_sig.kwonlyargs)
+
     def txt2img(self, opts):
         sampler_to_index = {s.name.lower(): n for n, s in enumerate(samplers.samplers)}
         upscaler_to_index = {s.name.lower(): n for n, s in enumerate(shared.sd_upscalers)}
@@ -25,7 +28,6 @@ class SDRPCServer():
         devices.torch_gc()
         model.to(shared.device)
         modules.sd_hijack.model_hijack.hijack(model)
-
 
         p = StableDiffusionProcessingTxt2Img(
             sd_model=model,
@@ -77,6 +79,7 @@ class SDRPCServer():
                 p2 = dict(p.__dict__)
                 p2['prompt_style'], p2['prompt_style2'] = p2.pop('styles')
                 p2.update(dict(
+                    sd_model=model,
                     steps=4,
                     mode=2,
                     init_img=processed.images[0],
@@ -85,11 +88,10 @@ class SDRPCServer():
                     upscale_overlap=64,
                     restore_faces=upscale_restore_faces,
                 ))
-                p2 = {k: v for k, v in p2.items() if k in i2i_argnames}
-                for k in i2i_argnames:
+                p2 = {k: v for k, v in p2.items() if k in self.i2i_argnames}
+                for k in self.i2i_argnames:
                     if k not in p2:
                         p2[k] = None
-                print(p2)
                 upscaleproc = img2img.img2img(**p2)
                 processed.images = upscaleproc[0]
 
