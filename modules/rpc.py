@@ -14,6 +14,12 @@ class SDRPCServer():
         i2i_sig = inspect.getfullargspec(img2img.img2img)
         self.i2i_argnames = frozenset(i2i_sig.args + i2i_sig.kwonlyargs)
 
+    def txts2imgs(self, opts_list):
+        ret = []
+        for opts in opts_list:
+            ret.append(self.txt2img(opts))
+        return ret
+
     def txt2img(self, opts):
         sampler_to_index = {s.name.lower(): n for n, s in enumerate(samplers.samplers)}
         upscaler_to_index = {s.name.lower(): n for n, s in enumerate(shared.sd_upscalers)}
@@ -106,7 +112,7 @@ class SDRPCServer():
             im.save(b, format=img_format, quality=img_quality)
             images.append(b.getvalue())
         ret['images'] = images
-        ret['elapsed'] = time.time() - start
+        ret['elapsed'] = round(time.time() - start, 3)
         ret['vram_used'], ret['vram_total'] = monitor.read()
         ret['model_hash'] = model.model_hash
         if '\n\n' in ret['info']:
