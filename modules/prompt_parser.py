@@ -155,7 +155,7 @@ def get_learned_conditioning(model, prompts, steps):
                         c = model.get_learned_conditioning([subtext])
                         c *= subweight
                     else:
-                        c.add(model.get_learned_conditioning([subtext]), alpha=subweight)
+                        c.add_(model.get_learned_conditioning([subtext]), alpha=subweight)
             conds.append(c[0])
 
         cond_schedule = []

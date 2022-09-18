@@ -4,6 +4,9 @@ import os
 import time
 import traceback
 
+# grpc c-ares doesn't resolve LAN/mDNS names
+os.putenv("GRPC_DNS_RESOLVER", "native")
+
 import grpc
 import msgpack
 
