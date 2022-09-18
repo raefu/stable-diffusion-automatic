@@ -1,15 +1,17 @@
 import io
 import inspect
+import os
 import threading
 import time
-
-import zerorpc
 
 import modules.sd_hijack
 from modules.processing import StableDiffusionProcessing, Processed, StableDiffusionProcessingTxt2Img, process_images
 from modules import shared, processing, sd_samplers as samplers, memmonitor, img2img, devices
 
-class SDRPCServer():
+from modules.pogorpc import PogoServer
+
+
+class SDRPCServer:
     def __init__(self):
         i2i_sig = inspect.getfullargspec(img2img.img2img)
         self.i2i_argnames = frozenset(i2i_sig.args + i2i_sig.kwonlyargs)
@@ -122,13 +124,14 @@ class SDRPCServer():
 
         return ret
 
+def read_key(name):
+    return open(os.path.join('keys', name), 'rb').read()
 
 def start_server():
-    s = zerorpc.Server(SDRPCServer(), heartbeat=None)
-    connstr = f"tcp://0.0.0.0:{shared.cmd_opts.port-1}"
-    s.bind(connstr)
-    print("starting zerorpc server", connstr)
-    s.run()
+    srv = PogoServer(SDRPCServer(),
+        port=(shared.cmd_opts.port or 7860) - 1,
+        creds=(read_key('server.key'), read_key('server.crt'), read_key('ca.crt')))
+    srv.run()
 
 def start():
     threading.Thread(target=start_server).start()
