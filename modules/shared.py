@@ -93,8 +93,6 @@ face_restorers = []
 
 modules.sd_models.list_models()
 
-print(modules.sd_models.checkpoints_list)
-
 
 class Options:
     class OptionInfo:
