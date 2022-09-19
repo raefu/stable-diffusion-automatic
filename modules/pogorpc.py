@@ -30,7 +30,7 @@ class PogoServer:
                 try:
                     return meth(args)
                 except Exception as e:
-                    context.set_code(grpc.StatusCode.UNAVAILABLE)
+                    context.set_code(grpc.StatusCode.INTERNAL)
                     context.set_details(traceback.format_exc())
                     return {'error': str(e)}
             return grpc.unary_unary_rpc_method_handler(wrapper,

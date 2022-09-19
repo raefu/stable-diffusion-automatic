@@ -25,7 +25,7 @@ class SDRPCServer:
 
     def caps(self, _):
         try:
-            rev = subprocess.check_output(['git', 'rev-parse', 'HEAD'])
+            rev = subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode('utf8')
         except subprocess.CalledProcessError:
             rev = None
 
@@ -44,9 +44,11 @@ class SDRPCServer:
         return {
             'git-rev': rev,
             'device': device_name,
-            'vram_total': device_total_memory,
-            'vram_used': devvice_used_ram,
-            'checkpoints': [sorted(set(c.hash for c in sd_models.checkpoints_list.values()))],
+            'vram_total': round(device_total_ram / 1024 ** 3, 2),
+            'vram_used': round(device_used_ram / 1024 ** 3, 2),
+            'checkpoints': sorted(set(c.hash for c in sd_models.checkpoints_list.values())),
+            'upscalers': sorted(set(s.name.lower() for s in shared.sd_upscalers)),
+            'face_restorers': sorted(set(s.name.lower() for s in shared.face_restorers)),
         }
 
     def txts2imgs(self, opts_list):
@@ -129,7 +131,7 @@ class SDRPCServer:
                     p2 = dict(p.__dict__)
                     p2['prompt_style'], p2['prompt_style2'] = p2.pop('styles')
                     p2.update(dict(
-                        sd_model=model,
+                        sd_model=shared.sd_model,
                         steps=4,
                         mode=2,
                         init_img=processed.images[0],

@@ -117,6 +117,7 @@ def load_model(cinf=None):
     from modules import lowvram, sd_hijack
     checkpoint_info = cinf or select_checkpoint()
 
+
     if checkpoint_info not in checkpoints_loaded:
         sd_config = OmegaConf.load(shared.cmd_opts.config)
         sd_model = instantiate_from_config(sd_config.model)
@@ -130,11 +131,12 @@ def load_model(cinf=None):
         sd_hijack.model_hijack.hijack(sd_model)
         sd_model.eval()
         checkpoints_loaded[checkpoint_info] = sd_model
+        print(f"Model {checkpoint_info.hash} loaded.")
     else:
         sd_model = checkpoints_loaded[checkpoint_info]
         sd_hijack.model_hijack.hijack(sd_model)
+        print(f"Model {checkpoint_info.hash} loaded. (Cached)")
 
-    print(f"Model {checkpoint_info.hash} loaded.")
     return sd_model
 
 
