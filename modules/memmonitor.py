@@ -1,6 +1,5 @@
 import threading
 import os
-import pynvml
 import time
 
 class MemUsageMonitor(threading.Thread):
@@ -47,6 +46,7 @@ class MemUsageMonitor(threading.Thread):
         return self.max_usage, self.total
 
 try:
+    import pynvml
     pynvml.nvmlInit()
 except Exception:
     print(f"Unable to initialize NVIDIA management. No memory stats.")
