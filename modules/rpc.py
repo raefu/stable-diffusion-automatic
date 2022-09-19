@@ -48,7 +48,7 @@ class SDRPCServer:
             'vram_used': round(device_used_ram / 1024 ** 3, 2),
             'checkpoints': sorted(set(c.hash for c in sd_models.checkpoints_list.values())),
             'upscalers': sorted(set(s.name.lower() for s in shared.sd_upscalers)),
-            'face_restorers': sorted(set(s.name.lower() for s in shared.face_restorers)),
+            'face_restorers': sorted(set(s.name().lower() for s in shared.face_restorers)),
         }
 
     def txts2imgs(self, opts_list):
