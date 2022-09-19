@@ -25,7 +25,7 @@ class SDRPCServer:
 
     def caps(self, _):
         try:
-            rev = subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode('utf8')
+            rev = subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode('utf8').strip()
         except subprocess.CalledProcessError:
             rev = None
 
