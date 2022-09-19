@@ -29,9 +29,10 @@ class PogoServer:
             def wrapper(args, context):
                 try:
                     return meth(args)
-                except Exception:
+                except Exception as e:
                     context.set_code(grpc.StatusCode.UNAVAILABLE)
                     context.set_details(traceback.format_exc())
+                    return {'error': str(e)}
             return grpc.unary_unary_rpc_method_handler(wrapper,
                 request_deserializer=msgpack.unpackb,
                 response_serializer=msgpack.packb)

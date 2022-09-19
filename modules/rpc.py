@@ -6,7 +6,7 @@ import time
 
 import modules.sd_hijack
 from modules.processing import StableDiffusionProcessing, Processed, StableDiffusionProcessingTxt2Img, process_images
-from modules import shared, processing, sd_samplers as samplers, memmonitor, img2img, devices
+from modules import shared, processing, sd_samplers as samplers, memmonitor, img2img, devices, sd_models
 
 from modules.pogorpc import PogoServer
 
@@ -28,11 +28,19 @@ class SDRPCServer:
         upscaler_to_index = {s.name.lower(): n for n, s in enumerate(shared.sd_upscalers)}
 
         model_req = opts.pop('model', 'model')
-        model_req = {'waifu': 'wd-v1-2-full-ema-pruned'}.get(model_req, model_req)
-        model = shared.sd_models[model_req]
+        model_hash = {
+            'waifu': 'e393dbe0',
+            'model': '44ef7ed9',
+        }[model_req]
+        model_ckpt = None
+        for ckpt in sd_models.checkpoints_list.values():
+            if ckpt.hash == model_hash:
+                model_ckpt = ckpt
+                break
+        else:
+            raise ValueError(f"unknown model '{model_req}' with hash {model_hash}")
 
         p = StableDiffusionProcessingTxt2Img(
-            sd_model=model,
             outpath_samples=".",
             outpath_grids=".",
             prompt=opts.pop('prompt', ''),
@@ -77,13 +85,12 @@ class SDRPCServer:
             monitor.start()
 
             with self.queue_lock:
-                for other_model in shared.sd_models.values():
-                    if other_model.model_hash != model.model_hash:
-                        other_model.to(devices.cpu)
-                devices.torch_gc()
-                model.to(shared.device)
-                modules.sd_hijack.model_hijack.hijack(model)
-
+                if shared.sd_model.sd_model_hash != model_ckpt.hash:
+                    shared.sd_model.to(devices.cpu)
+                    devices.torch_gc()
+                    shared.sd_model = sd_models.load_model(model_ckpt)
+                    shared.sd_model.to(shared.device)
+                p.sd_model = shared.sd_model
                 processed = process_images(p)
                 if upscale:
                     # gross way to not have to respecify every arg
@@ -118,7 +125,7 @@ class SDRPCServer:
         ret['images'] = images
         ret['elapsed'] = round(time.time() - start, 3)
         ret['vram_used'], ret['vram_total'] = monitor.read()
-        ret['model_hash'] = model.model_hash
+        ret['model_hash'] = model_ckpt.hash
         if '\n\n' in ret['info']:
             ret['warn'] = ret.pop('info').split('\n\n', 1)[1]
         for k in ('prompt', 'info', 'negative_prompt'):
