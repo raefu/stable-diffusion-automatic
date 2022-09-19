@@ -12,9 +12,10 @@ from modules.pogorpc import PogoServer
 
 
 class SDRPCServer:
-    def __init__(self):
+    def __init__(self, queue_lock):
         i2i_sig = inspect.getfullargspec(img2img.img2img)
         self.i2i_argnames = frozenset(i2i_sig.args + i2i_sig.kwonlyargs)
+        self.queue_lock = queue_lock
 
     def txts2imgs(self, opts_list):
         ret = []
@@ -29,13 +30,6 @@ class SDRPCServer:
         model_req = opts.pop('model', 'model')
         model_req = {'waifu': 'wd-v1-2-full-ema-pruned'}.get(model_req, model_req)
         model = shared.sd_models[model_req]
-
-        for other_model in shared.sd_models.values():
-            if other_model.model_hash != model.model_hash:
-                other_model.to(devices.cpu)
-        devices.torch_gc()
-        model.to(shared.device)
-        modules.sd_hijack.model_hijack.hijack(model)
 
         p = StableDiffusionProcessingTxt2Img(
             sd_model=model,
@@ -81,28 +75,36 @@ class SDRPCServer:
         processed2 = None
         try:
             monitor.start()
-            processed = process_images(p)
-            if upscale:
-                # gross way to not have to respecify every arg
-                p2 = dict(p.__dict__)
-                p2['prompt_style'], p2['prompt_style2'] = p2.pop('styles')
-                p2.update(dict(
-                    sd_model=model,
-                    steps=4,
-                    mode=2,
-                    init_img=processed.images[0],
-                    denoising_strength=0.2,
-                    upscaler_index=upscaler_to_index['real-esrgan 2x plus'],
-                    upscale_overlap=64,
-                    restore_faces=upscale_restore_faces,
-                ))
-                p2 = {k: v for k, v in p2.items() if k in self.i2i_argnames}
-                for k in self.i2i_argnames:
-                    if k not in p2:
-                        p2[k] = None
-                upscaleproc = img2img.img2img(**p2)
-                processed.images = upscaleproc[0]
 
+            with self.queue_lock:
+                for other_model in shared.sd_models.values():
+                    if other_model.model_hash != model.model_hash:
+                        other_model.to(devices.cpu)
+                devices.torch_gc()
+                model.to(shared.device)
+                modules.sd_hijack.model_hijack.hijack(model)
+
+                processed = process_images(p)
+                if upscale:
+                    # gross way to not have to respecify every arg
+                    p2 = dict(p.__dict__)
+                    p2['prompt_style'], p2['prompt_style2'] = p2.pop('styles')
+                    p2.update(dict(
+                        sd_model=model,
+                        steps=4,
+                        mode=2,
+                        init_img=processed.images[0],
+                        denoising_strength=0.2,
+                        upscaler_index=upscaler_to_index['real-esrgan 2x plus'],
+                        upscale_overlap=64,
+                        restore_faces=upscale_restore_faces,
+                    ))
+                    p2 = {k: v for k, v in p2.items() if k in self.i2i_argnames}
+                    for k in self.i2i_argnames:
+                        if k not in p2:
+                            p2[k] = None
+                    upscaleproc = img2img.img2img(**p2)
+                    processed.images = upscaleproc[0]
         finally:
             monitor.stop()
         shared.total_tqdm.clear()
@@ -127,11 +129,9 @@ class SDRPCServer:
 def read_key(name):
     return open(os.path.join('keys', name), 'rb').read()
 
-def start_server():
-    srv = PogoServer(SDRPCServer(),
+def start(queue_lock):
+    srv = PogoServer(SDRPCServer(queue_lock),
         port=(shared.cmd_opts.port or 7860) - 1,
         creds=(read_key('server.key'), read_key('server.crt'), read_key('ca.crt')))
-    srv.run()
-
-def start():
-    threading.Thread(target=start_server).start()
+    threading.Thread(target=srv.run).start()
+    return srv

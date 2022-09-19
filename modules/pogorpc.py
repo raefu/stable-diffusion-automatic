@@ -66,7 +66,7 @@ class PogoServer:
         return self.server.start()
 
     def stop(self, grace=180):
-        return self.server.stop(grace)
+        return self.server.stop(grace).wait()
 
     def run(self):
         self.start()

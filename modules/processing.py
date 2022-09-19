@@ -168,8 +168,6 @@ def fix_seed(p):
     p.seed = int(random.randrange(4294967294)) if p.seed is None or p.seed == -1 else p.seed
     p.subseed = int(random.randrange(4294967294)) if p.subseed is None or p.subseed == -1 else p.subseed
 
-_process_lock = threading.Lock()
-
 def process_images(p: StableDiffusionProcessing, opts=opts) -> Processed:
     """this is the main loop that both txt2img and img2img use; it calls func_init once inside all the scopes and func_sample once per batch"""
 
@@ -236,7 +234,7 @@ def process_images(p: StableDiffusionProcessing, opts=opts) -> Processed:
     output_images = []
     precision_scope = torch.autocast if cmd_opts.precision == "autocast" else contextlib.nullcontext
     ema_scope = (contextlib.nullcontext if cmd_opts.lowvram else p.sd_model.ema_scope)
-    with torch.no_grad(), precision_scope("cuda"), ema_scope(), _process_lock:
+    with torch.no_grad(), precision_scope("cuda"), ema_scope():
         p.init(seed=all_seeds[0])
 
         if state.job_count == -1:

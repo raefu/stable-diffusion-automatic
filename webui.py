@@ -131,8 +131,12 @@ modules.sd_hijack.model_hijack.hijack(shared.sd_model)
 
 def webui():
     # make the program just exit at ctrl+c without waiting for anything
+
+    rpc = modules.rpc.start(queue_lock)
+
     def sigint_handler(sig, frame):
         print(f'Interrupted with signal {sig} in {frame}')
+        rpc.stop()  # graceful shutdown
         os._exit(0)
 
     signal.signal(signal.SIGINT, sigint_handler)
@@ -144,7 +148,6 @@ def webui():
         run_pnginfo=modules.extras.run_pnginfo
     )
 
-    modules.rpc.start()
 
     demo.launch(
         share=cmd_opts.share,
