@@ -1,8 +1,11 @@
 import io
 import inspect
 import os
+import subprocess
 import threading
 import time
+
+import torch
 
 import modules.sd_hijack
 from modules.processing import StableDiffusionProcessing, Processed, StableDiffusionProcessingTxt2Img, process_images
@@ -16,6 +19,35 @@ class SDRPCServer:
         i2i_sig = inspect.getfullargspec(img2img.img2img)
         self.i2i_argnames = frozenset(i2i_sig.args + i2i_sig.kwonlyargs)
         self.queue_lock = queue_lock
+
+    def ping(self, n):
+        return n + 1
+
+    def caps(self, _):
+        try:
+            rev = subprocess.check_output(['git', 'rev-parse', 'HEAD'])
+        except subprocess.CalledProcessError:
+            rev = None
+
+        device_name = 'unknown'
+        device_total_ram = 0
+        device_used_ram = 0
+
+        try:
+            dev = torch.cuda.get_device_properties(0)
+            device_name = dev.name
+            device_total_ram = dev.total_memory
+            device_used_ram = torch.cuda.memory_reserved(0)
+        except AssertionError:
+            pass
+
+        return {
+            'git-rev': rev,
+            'device': device_name,
+            'vram_total': device_total_memory,
+            'vram_used': devvice_used_ram,
+            'checkpoints': [sorted(set(c.hash for c in sd_models.checkpoints_list.values()))],
+        }
 
     def txts2imgs(self, opts_list):
         ret = []
