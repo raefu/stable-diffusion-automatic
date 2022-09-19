@@ -120,10 +120,11 @@ class SDRPCServer:
 
             with self.queue_lock:
                 if shared.sd_model.sd_model_hash != model_ckpt.hash:
-                    shared.sd_model.to(devices.cpu)
-                    devices.torch_gc()
+                    old_model = shared.sd_model
                     shared.sd_model = sd_models.load_model(model_ckpt)
                     shared.sd_model.to(shared.device)
+                    old_model.to(devices.cpu)
+                    devices.torch_gc()
                 p.sd_model = shared.sd_model
                 processed = process_images(p)
                 if upscale:

@@ -69,6 +69,7 @@ modules.scripts.load_scripts(os.path.join(script_path, "scripts"))
 shared.sd_model = modules.sd_models.load_model()
 shared.opts.onchange("sd_model_checkpoint", wrap_queued_call(lambda: modules.sd_models.reload_model_weights(shared.sd_model)))
 
+modules.sd_models.load_model([c for c in modules.sd_models.checkpoints_list.values() if c.hash == 'e393dbe0'][0])
 
 def webui():
     # make the program just exit at ctrl+c without waiting for anything
