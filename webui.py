@@ -23,6 +23,7 @@ import modules.txt2img
 import modules.img2img
 import modules.swinir as swinir
 import modules.sd_models
+import modules.devices as devices
 
 import modules.rpc
 
@@ -76,10 +77,10 @@ shared.opts.onchange("sd_model_checkpoint", wrap_queued_call(lambda: modules.sd_
 
 # preload wd-v1-2-full-ema-pruned.ckpt
 wd = modules.sd_models.select_checkpoint('e393dbe0')
-wd and modules.sd_models.load_model(wd)
+wd and modules.sd_models.load_model(wd).to(devices.cpu)
 # preload gg1342_testrun1_pruned.ckpt
 gg = modules.sd_models.select_checkpoint('13d7b26b')
-gg and modules.sd_models.load_model(gg)
+gg and modules.sd_models.load_model(gg).to(devices.cpu)
 
 def webui():
     # make the program just exit at ctrl+c without waiting for anything
