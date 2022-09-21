@@ -172,7 +172,7 @@ class SDRPCServer:
         for k in ('sampler_index', 'seed_resize_from_w', 'seed_resize_from_h', 'denoising_strength',
             'extra_generation_params', 'index_of_first_image', 'all_prompts', 'all_seeds', 'all_subseeds',
             'face_restoration_model', 'restore_faces', 'batch_size', 'upscale', 'n_iter', 'width', 'height',
-            'steps', 'sampler', 'cfg_scale', 'subseed_strength', 'sd_model_hash'):
+            'steps', 'sampler', 'cfg_scale', 'sd_model_hash'):
             ret.pop(k, None)
 
         if not ret['vram_used']:
