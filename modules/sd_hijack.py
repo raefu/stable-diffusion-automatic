@@ -1,3 +1,4 @@
+import contextlib
 import math
 import os
 import sys
@@ -267,6 +268,19 @@ class StableDiffusionModelHijack:
 
         for layer in [layer for layer in self.layers if type(layer) == torch.nn.Conv2d]:
             layer.padding_mode = 'circular' if enable else 'zeros'
+
+@contextlib.contextmanager
+def opt_split_attention():
+    orig_crossattn_forward = ldm.modules.attention.CrossAttention.forward
+    orig_nonlinearity = ldm.modules.diffusionmodules.model.nonlinearity
+    orig_attn_forward = ldm.modules.diffusionmodules.model.AttnBlock.forward
+
+    try:
+        yield
+    finally:
+        ldm.modules.attention.CrossAttention.forward = orig_crossattn_forward
+        ldm.modules.diffusionmodules.model.nonlinearity = orig_nonlinearity
+        ldm.modules.diffusionmodules.model.AttnBlock.forward = orig_attn_forward
 
 
 class FrozenCLIPEmbedderWithCustomWords(torch.nn.Module):

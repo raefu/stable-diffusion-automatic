@@ -1,3 +1,4 @@
+import contextlib
 import io
 import inspect
 import os
@@ -7,7 +8,7 @@ import time
 
 import torch
 
-import modules.sd_hijack
+import modules.sd_hijack as sd_hijack
 from modules.processing import StableDiffusionProcessing, Processed, StableDiffusionProcessingTxt2Img, process_images
 from modules import shared, processing, sd_samplers as samplers, memmonitor, img2img, devices, sd_models
 
@@ -63,8 +64,9 @@ class SDRPCServer:
 
         model_req = opts.pop('model', 'model')
         model_hash = {
-            'waifu': 'e393dbe0',
             'model': '44ef7ed9',
+            'waifu': 'e393dbe0',
+            'gg1342': '13d7b26b',
         }[model_req]
         model_ckpt = None
         for ckpt in sd_models.checkpoints_list.values():
@@ -99,6 +101,7 @@ class SDRPCServer:
         )
 
         upscale = opts.pop('upscale', False)
+        opt_split_attention = opts.pop('opt1', False)
 
         img_format = opts.pop('img_format', 'bmp')
         img_quality = int(opts.pop('img_quality', 85))
@@ -116,7 +119,7 @@ class SDRPCServer:
         try:
             monitor.start()
 
-            with self.queue_lock:
+            with self.queue_lock, (sd_hijack.opt_split_attention() if opt_split_attention else contextlib.nullcontext()):
                 start = time.time()
                 if shared.sd_model.sd_model_hash != model_ckpt.hash:
                     old_model = shared.sd_model

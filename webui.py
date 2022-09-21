@@ -69,14 +69,17 @@ def wrap_gradio_gpu_call(func):
 
 modules.scripts.load_scripts(os.path.join(script_path, "scripts"))
 
+print(sorted(modules.sd_models.checkpoints_list.keys()))
+
 shared.sd_model = modules.sd_models.load_model()
 shared.opts.onchange("sd_model_checkpoint", wrap_queued_call(lambda: modules.sd_models.reload_model_weights(shared.sd_model)))
 
-try:
-    # preload wd-v1-2-full-ema-pruned.ckpt
-    modules.sd_models.load_model([c for c in modules.sd_models.checkpoints_list.values() if c.hash == 'e393dbe0'][0])
-except IndexError:
-    pass
+# preload wd-v1-2-full-ema-pruned.ckpt
+wd = modules.sd_models.select_checkpoint('e393dbe0')
+wd and modules.sd_models.load_model(wd)
+# preload gg1342_testrun1_pruned.ckpt
+gg = modules.sd_models.select_checkpoint('13d7b26b')
+gg and modules.sd_models.load_model(gg)
 
 def webui():
     # make the program just exit at ctrl+c without waiting for anything
