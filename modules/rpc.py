@@ -168,8 +168,11 @@ class SDRPCServer:
         if not ret['subseed_strength']:
             ret.pop('subseed')
             ret.pop('subseed_strength')
+        # remove unnecessary repetition in the response
         for k in ('sampler_index', 'seed_resize_from_w', 'seed_resize_from_h', 'denoising_strength',
-            'extra_generation_params', 'index_of_first_image', 'all_prompts', 'all_seeds', 'all_subseeds'):
+            'extra_generation_params', 'index_of_first_image', 'all_prompts', 'all_seeds', 'all_subseeds',
+            'face_restoration_model', 'restore_faces', 'batch_size', 'upscale', 'n_iter', 'width', 'height',
+            'steps', 'sampler', 'cfg_scale', 'subseed_strength'):
             ret.pop(k, None)
 
         if not ret['vram_used']:
