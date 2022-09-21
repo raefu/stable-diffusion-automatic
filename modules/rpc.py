@@ -54,8 +54,9 @@ class SDRPCServer:
 
     def txts2imgs(self, opts_list):
         ret = []
-        for opts in opts_list:
-            ret.append(self.txt2img(opts))
+        with self.queue_lock:  # reentrant so this is okay
+            for opts in opts_list:
+                ret.append(self.txt2img(opts))
         return ret
 
     def txt2img(self, opts):
