@@ -164,6 +164,18 @@ class SDRPCServer:
         ret['elapsed'] = round(time.time() - start, 3)
         ret['vram_used'], ret['vram_total'] = monitor.read()
         ret['model_hash'] = model_ckpt.hash
+
+        if not ret['subseed_strength']:
+            ret.pop('subseed')
+            ret.pop('subseed_strength')
+        for k in ('sampler_index', 'seed_resize_from_w', 'seed_resize_from_h', 'denoising_strength',
+            'extra_generation_params', 'index_of_first_image', 'all_prompts', 'all_seeds', 'all_subseeds'):
+            ret.pop(k, None)
+
+        if not ret['vram_used']:
+            ret.pop('vram_used')
+            ret.pop('vram_total')
+
         if '\n\n' in ret['info']:
             ret['warn'] = ret.pop('info').split('\n\n', 1)[1]
         for k in ('prompt', 'info', 'negative_prompt'):
