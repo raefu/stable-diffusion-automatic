@@ -111,14 +111,13 @@ class SDRPCServer:
             upscale_restore_faces = p.restore_faces
             p.restore_faces = False
 
-        start = time.time()
-
         monitor = memmonitor.MemUsageMonitor()
         processed2 = None
         try:
             monitor.start()
 
             with self.queue_lock:
+                start = time.time()
                 if shared.sd_model.sd_model_hash != model_ckpt.hash:
                     old_model = shared.sd_model
                     shared.sd_model = sd_models.load_model(model_ckpt)
@@ -147,9 +146,9 @@ class SDRPCServer:
                             p2[k] = None
                     upscaleproc = img2img.img2img(**p2)
                     processed.images = upscaleproc[0]
+                shared.total_tqdm.clear()
         finally:
             monitor.stop()
-        shared.total_tqdm.clear()
 
         ret = dict(processed.__dict__)
         images = []
