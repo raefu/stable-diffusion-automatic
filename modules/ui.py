@@ -95,7 +95,7 @@ def save_files(js_data, images, index):
     filenames = []
 
     data = json.loads(js_data)
-
+    
     if index > -1 and opts.save_selected_only and (index > 0 or not opts.return_grid): # ensures we are looking at a specific non-grid picture, and we have save_selected_only
         images = [images[index]]
         data["seed"] += (index - 1 if opts.return_grid else index)
@@ -331,24 +331,24 @@ def connect_reuse_seed(seed: gr.Number, reuse_seed: gr.Button, generation_info: 
 
 def create_toprow(is_img2img):
     with gr.Row(elem_id="toprow"):
-        with gr.Column():
+        with gr.Column(scale=4):
             with gr.Row():
-                with gr.Column():
+                with gr.Column(scale=8):
                     with gr.Row():
                         prompt = gr.Textbox(label="Prompt", elem_id="prompt", show_label=False, placeholder="Prompt", lines=2)
                         roll = gr.Button('Roll', elem_id="roll", visible=len(shared.artist_db.artists) > 0)
 
-                with gr.Column():
+                with gr.Column(scale=1, elem_id="style_pos_col"):
                     prompt_style = gr.Dropdown(label="Style 1", elem_id="style_index", choices=[k for k, v in shared.prompt_styles.styles.items()], value=next(iter(shared.prompt_styles.styles.keys())), visible=len(shared.prompt_styles.styles) > 1)
 
             with gr.Row():
-                with gr.Column():
+                with gr.Column(scale=8):
                     negative_prompt = gr.Textbox(label="Negative prompt", elem_id="negative_prompt", show_label=False, placeholder="Negative prompt", lines=2)
 
-                with gr.Column():
+                with gr.Column(scale=1, elem_id="style_neg_col"):
                     prompt_style2 = gr.Dropdown(label="Style 2", elem_id="style2_index", choices=[k for k, v in shared.prompt_styles.styles.items()], value=next(iter(shared.prompt_styles.styles.keys())), visible=len(shared.prompt_styles.styles) > 1)
 
-        with gr.Column():
+        with gr.Column(scale=1):
             with gr.Row():
                 submit = gr.Button('Generate', elem_id="generate", variant='primary')
 
