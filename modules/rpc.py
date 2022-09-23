@@ -15,6 +15,8 @@ from modules import shared, processing, sd_samplers as samplers, memmonitor, img
 from modules.pogorpc import PogoServer
 
 
+nullcontext = contextlib.nullcontext()
+
 class SDRPCServer:
     def __init__(self, queue_lock):
         i2i_sig = inspect.getfullargspec(img2img.img2img)
@@ -54,12 +56,12 @@ class SDRPCServer:
 
     def txts2imgs(self, opts_list):
         ret = []
-        with self.queue_lock:  # reentrant so this is okay
+        with self.queue_lock:
             for opts in opts_list:
-                ret.append(self.txt2img(opts))
+                ret.append(self.txt2img(opts, lock=False))
         return ret
 
-    def txt2img(self, opts):
+    def txt2img(self, opts, lock=True):
         sampler_to_index = {s.name.lower(): n for n, s in enumerate(samplers.samplers)}
         upscaler_to_index = {s.name.lower(): n for n, s in enumerate(shared.sd_upscalers)}
 
@@ -120,7 +122,8 @@ class SDRPCServer:
         try:
             monitor.start()
 
-            with self.queue_lock, (sd_hijack.opt_split_attention() if opt_split_attention else contextlib.nullcontext()):
+            with self.queue_lock if lock else nullcontext, \
+                    sd_hijack.opt_split_attention() if opt_split_attention else nullcontext:
                 start = time.time()
                 if shared.sd_model.sd_model_hash != model_ckpt.hash:
                     old_model = shared.sd_model

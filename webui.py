@@ -35,7 +35,7 @@ esrgan.load_models(cmd_opts.esrgan_models_path)
 swinir.load_models(cmd_opts.swinir_models_path)
 realesrgan.setup_realesrgan()
 ldsr.add_lsdr()
-queue_lock = threading.RLock()
+queue_lock = threading.Lock()
 
 
 def wrap_queued_call(func):
