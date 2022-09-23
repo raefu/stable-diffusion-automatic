@@ -5,7 +5,8 @@ import sys
 import traceback
 import torch
 import numpy as np
-from torch import einsum
+from torch import einsum, nn
+from inspect import isfunction
 
 from modules.shared import opts, device, cmd_opts
 
@@ -419,6 +420,79 @@ class EmbeddingsWithFixes(torch.nn.Module):
 
         return inputs_embeds
 
+
+
+def exists(val):
+    return val is not None
+
+def default(val, d):
+    if exists(val):
+        return val
+    return d() if isfunction(d) else d
+
+
+# https://github.com/huggingface/diffusers/pull/532/files
+class MemoryEfficientCrossAttention(torch.nn.Module):
+
+    def __init__(self,
+                 query_dim,
+                 context_dim=None,
+                 heads=8,
+                 dim_head=64,
+                 dropout=0.0):
+        super().__init__()
+        inner_dim = dim_head * heads
+        context_dim = default(context_dim, query_dim)
+
+        self.heads = heads
+        self.dim_head = dim_head
+
+        self.to_q = nn.Linear(query_dim, inner_dim, bias=False)
+        self.to_k = nn.Linear(context_dim, inner_dim, bias=False)
+        self.to_v = nn.Linear(context_dim, inner_dim, bias=False)
+
+        self.to_out = nn.Sequential(nn.Linear(inner_dim, query_dim),
+                                    nn.Dropout(dropout))
+        self.attention_op = None
+
+    def forward(self, x, context=None, mask=None):
+        q = self.to_q(x)
+        context = default(context, x)
+        k = self.to_k(context)
+        v = self.to_v(context)
+
+        b, _, _ = q.shape
+        q, k, v = map(
+            lambda t: t.unsqueeze(3).reshape(b, t.shape[
+                1], self.heads, self.dim_head).permute(0, 2, 1, 3).reshape(
+                    b * self.heads, t.shape[1], self.dim_head).contiguous(),
+            (q, k, v),
+        )
+
+        # actually compute the attention, what we cannot get enough of
+        out = xformers.ops.memory_efficient_attention(q,
+                                                      k,
+                                                      v,
+                                                      attn_bias=None,
+                                                      op=self.attention_op)
+
+        # TODO: Use this directly in the attention operation, as a bias
+        if exists(mask):
+            raise NotImplementedError
+        out = (out.unsqueeze(0).reshape(
+            b, self.heads, out.shape[1],
+            self.dim_head).permute(0, 2, 1,
+                                   3).reshape(b, out.shape[1],
+                                              self.heads * self.dim_head))
+        return self.to_out(out)
+
+try:
+    import xformers
+    import xformers.ops
+    print("using xformers CrossAttention!")
+    ldm.modules.attention.CrossAttention = MemoryEfficientCrossAttention
+except ImportError:
+    pass
 
 def add_circular_option_to_conv_2d():
     conv2d_constructor = torch.nn.Conv2d.__init__
