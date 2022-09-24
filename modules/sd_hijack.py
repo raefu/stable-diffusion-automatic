@@ -277,14 +277,18 @@ class StableDiffusionModelHijack:
 
 @contextlib.contextmanager
 def opt_split_attention():
-    orig_crossattn_forward = ldm.modules.attention.CrossAttention.forward
     orig_nonlinearity = ldm.modules.diffusionmodules.model.nonlinearity
     orig_attn_forward = ldm.modules.diffusionmodules.model.AttnBlock.forward
+    orig_crossattention_forward = ldm.modules.attention.CrossAttention.forward
 
     try:
+        if ldm.modules.attention.CrossAttention != MemoryEfficientCrossAttention:
+            ldm.modules.attention.CrossAttention.forward = split_cross_attention_forward
+        ldm.modules.diffusionmodules.model.nonlinearity = nonlinearity_hijack
+        ldm.modules.diffusionmodules.model.AttnBlock.forward = cross_attention_attnblock_forward
         yield
     finally:
-        ldm.modules.attention.CrossAttention.forward = orig_crossattn_forward
+        ldm.modules.attention.CrossAttention.forward = orig_crossattention_forward
         ldm.modules.diffusionmodules.model.nonlinearity = orig_nonlinearity
         ldm.modules.diffusionmodules.model.AttnBlock.forward = orig_attn_forward
 
