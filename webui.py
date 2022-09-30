@@ -2,6 +2,7 @@ import glob
 import os
 import threading
 
+from modules import devices
 from modules.paths import script_path
 
 import signal
@@ -50,18 +51,24 @@ def wrap_queued_call(func):
 
 def wrap_gradio_gpu_call(func):
     def f(*args, **kwargs):
+        devices.torch_gc()
+
         shared.state.sampling_step = 0
         shared.state.job_count = -1
         shared.state.job_no = 0
+        shared.state.job_timestamp = shared.state.get_job_timestamp()
         shared.state.current_latent = None
         shared.state.current_image = None
         shared.state.current_image_sampling_step = 0
+        shared.state.interrupted = False
 
         with queue_lock:
             res = func(*args, **kwargs)
 
         shared.state.job = ""
         shared.state.job_count = 0
+
+        devices.torch_gc()
 
         return res
 
@@ -98,7 +105,8 @@ def webui():
         txt2img=wrap_gradio_gpu_call(modules.txt2img.txt2img),
         img2img=wrap_gradio_gpu_call(modules.img2img.img2img),
         run_extras=wrap_gradio_gpu_call(modules.extras.run_extras),
-        run_pnginfo=modules.extras.run_pnginfo
+        run_pnginfo=modules.extras.run_pnginfo,
+        run_modelmerger=modules.extras.run_modelmerger
     )
 
 
