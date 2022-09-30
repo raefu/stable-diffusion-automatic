@@ -55,8 +55,6 @@ def img2img(mode: int, prompt: str, negative_prompt: str, prompt_style: str, pro
     is_inpaint = mode == 1
     is_batch = mode == 2
 
-    print("IMG2IMG", prompt, mode)
-
     if is_inpaint:
         if mask_mode == 0:
             image = init_img_with_mask['image']
@@ -74,7 +72,7 @@ def img2img(mode: int, prompt: str, negative_prompt: str, prompt_style: str, pro
     assert 0. <= denoising_strength <= 1., 'can only work with strength in [0.0, 1.0]'
 
     p = StableDiffusionProcessingImg2Img(
-        sd_model=sd_model,
+        sd_model=shared.sd_model,
         outpath_samples=opts.outdir_samples or opts.outdir_img2img_samples,
         outpath_grids=opts.outdir_grids or opts.outdir_img2img_grids,
         prompt=prompt,

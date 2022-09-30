@@ -1,6 +1,5 @@
 import contextlib
 import io
-import inspect
 import os
 import subprocess
 import threading
@@ -9,18 +8,17 @@ import time
 import torch
 
 import modules.sd_hijack as sd_hijack
-from modules.processing import StableDiffusionProcessing, Processed, StableDiffusionProcessingTxt2Img, process_images
-from modules import shared, processing, sd_samplers as samplers, memmonitor, img2img, devices, sd_models
+from modules.processing import StableDiffusionProcessingImg2Img, StableDiffusionProcessingTxt2Img, process_images
+from modules import shared, sd_samplers as samplers, memmonitor, devices, sd_models
 
 from modules.pogorpc import PogoServer
+import scripts.sd_upscale
 
 
 nullcontext = contextlib.nullcontext()
 
 class SDRPCServer:
     def __init__(self, queue_lock):
-        i2i_sig = inspect.getfullargspec(img2img.img2img)
-        self.i2i_argnames = frozenset(i2i_sig.args + i2i_sig.kwonlyargs)
         self.queue_lock = queue_lock
 
     def ping(self, n):
@@ -134,25 +132,34 @@ class SDRPCServer:
                 p.sd_model = shared.sd_model
                 processed = process_images(p)
                 if upscale:
-                    # gross way to not have to respecify every arg
-                    p2 = dict(p.__dict__)
-                    p2['prompt_style'], p2['prompt_style2'] = p2.pop('styles')
-                    p2.update(dict(
+                    p2 = StableDiffusionProcessingImg2Img(
+                        outpath_samples=".",
+                        outpath_grids=".",
+
                         sd_model=shared.sd_model,
-                        steps=4,
-                        mode=2,
-                        init_img=processed.images[0],
-                        denoising_strength=0.2,
-                        upscaler_index=upscaler_to_index['real-esrgan 2x plus'],
-                        upscale_overlap=64,
+                        prompt=p.prompt,
+                        negative_prompt=p.negative_prompt,
+                        styles=p.styles,
+                        seed=p.seed,
+                        subseed=p.subseed,
+                        subseed_strength=p.subseed_strength,
+                        seed_resize_from_h=p.seed_resize_from_h,
+                        seed_resize_from_w=p.seed_resize_from_w,
+                        sampler_index=p.sampler_index,
+                        batch_size=p.batch_size,
+                        cfg_scale=p.cfg_scale,
                         restore_faces=upscale_restore_faces,
-                    ))
-                    p2 = {k: v for k, v in p2.items() if k in self.i2i_argnames}
-                    for k in self.i2i_argnames:
-                        if k not in p2:
-                            p2[k] = None
-                    upscaleproc = img2img.img2img(**p2)
-                    processed.images = upscaleproc[0]
+                        tiling=p.tiling,
+                        init_images=[processed.images[0]],
+                        width=576,
+                        height=576,
+                        n_iter=1,
+                        steps=20,
+                        denoising_strength=0.25,
+                    )
+                    upscaleproc = scripts.sd_upscale.Script().run(
+                        p2, None, 64, upscaler_to_index['real-esrgan 2x plus'])
+                    processed.images = upscaleproc.images
                 shared.total_tqdm.clear()
         finally:
             monitor.stop()
@@ -165,7 +172,9 @@ class SDRPCServer:
             images.append(b.getvalue())
         ret['images'] = images
         ret['elapsed'] = round(time.time() - start, 3)
-        ret['vram_used'], ret['vram_total'] = monitor.read()
+        vram = monitor.read()
+        if vram[0]:
+            ret['vram_used'], ret['vram_total'] = vram
         ret['model_hash'] = model_ckpt.hash
 
         if not ret['subseed_strength']:
@@ -175,7 +184,8 @@ class SDRPCServer:
         for k in ('sampler_index', 'seed_resize_from_w', 'seed_resize_from_h', 'denoising_strength',
             'extra_generation_params', 'index_of_first_image', 'all_prompts', 'all_seeds', 'all_subseeds',
             'face_restoration_model', 'restore_faces', 'batch_size', 'upscale', 'n_iter', 'width', 'height',
-            'steps', 'sampler', 'cfg_scale', 'sd_model_hash'):
+            'steps', 'sampler', 'cfg_scale', 'sd_model_hash', 'eta', 'ddim_discretize', 's_churn', 's_tmin',
+            's_tmax', 's_noise', 'infotexts'):
             ret.pop(k, None)
 
         if not ret['vram_used']:
