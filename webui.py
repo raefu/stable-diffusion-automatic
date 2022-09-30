@@ -89,6 +89,9 @@ wd and modules.sd_models.load_model(wd).to(devices.cpu)
 gg = modules.sd_models.select_checkpoint('13d7b26b')
 gg and modules.sd_models.load_model(gg).to(devices.cpu)
 
+# ensure the currently loaded model is on the gpu
+shared.sd_model.to(shared.device)
+
 def webui():
     # make the program just exit at ctrl+c without waiting for anything
 
