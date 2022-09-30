@@ -172,9 +172,7 @@ class SDRPCServer:
             images.append(b.getvalue())
         ret['images'] = images
         ret['elapsed'] = round(time.time() - start, 3)
-        vram = monitor.read()
-        if vram[0]:
-            ret['vram_used'], ret['vram_total'] = vram
+        ret['vram_used'], ret['vram_total'] = monitor.read()
         ret['model_hash'] = model_ckpt.hash
 
         if not ret['subseed_strength']:
