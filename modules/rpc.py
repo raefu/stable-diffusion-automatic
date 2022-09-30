@@ -104,6 +104,11 @@ class SDRPCServer:
         upscale = opts.pop('upscale', False)
         opt_split_attention = opts.pop('opt1', False)
 
+        upscale_steps = opts.pop('upscale_steps', 20)
+        upscale_denoising_strength = opts.pop('denoise_strength', 0.2)
+        upscale_height = opts.pop('upscale_height', 576)
+        upscale_width = opts.pop('upscale_width', 576)
+
         img_format = opts.pop('img_format', 'bmp')
         img_quality = int(opts.pop('img_quality', 85))
         if img_format not in ('bmp', 'png', 'jpeg', 'webp'):
@@ -151,11 +156,11 @@ class SDRPCServer:
                         restore_faces=upscale_restore_faces,
                         tiling=p.tiling,
                         init_images=[processed.images[0]],
-                        width=576,
-                        height=576,
+                        width=upscale_width,
+                        height=upscale_height,
                         n_iter=1,
-                        steps=20,
-                        denoising_strength=0.25,
+                        steps=upscale_steps,
+                        denoising_strength=upscale_denoising_strength,
                     )
                     upscaleproc = scripts.sd_upscale.Script().run(
                         p2, None, 64, upscaler_to_index['real-esrgan 2x plus'])
