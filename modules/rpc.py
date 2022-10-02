@@ -163,7 +163,7 @@ class SDRPCServer:
                         denoising_strength=upscale_denoising_strength,
                     )
                     upscaleproc = scripts.sd_upscale.Script().run(
-                        p2, None, 64, upscaler_to_index['real-esrgan 2x plus'])
+                        p2, None, 64, upscaler_to_index['r-esrgan 2x+'])
                     processed.images = upscaleproc.images
                 shared.total_tqdm.clear()
         finally:
