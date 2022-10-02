@@ -17,6 +17,13 @@ import scripts.sd_upscale
 
 nullcontext = contextlib.nullcontext()
 
+class FakeOpts:
+    def __init__(self, wrapped):
+        self.wrapped = wrapped
+
+    def __getattr__(self, name):
+        return getattr(self.wrapped, name)
+
 class SDRPCServer:
     def __init__(self, queue_lock):
         self.queue_lock = queue_lock
@@ -47,9 +54,9 @@ class SDRPCServer:
             'device': device_name,
             'vram_total': round(device_total_ram / 1024 ** 3, 2),
             'vram_used': round(device_used_ram / 1024 ** 3, 2),
-            'checkpoints': sorted(set(c.hash for c in sd_models.checkpoints_list.values())),
-            'upscalers': sorted(set(s.name.lower() for s in shared.sd_upscalers)),
-            'face_restorers': sorted(set(s.name().lower() for s in shared.face_restorers)),
+            'checkpoints': {c.hash: c.model_name for c in sd_models.checkpoints_list.values()},
+            'upscalers': sorted(set(s.name for s in shared.sd_upscalers)),
+            'face_restorers': sorted(set(s.name() for s in shared.face_restorers)),
         }
 
     def txts2imgs(self, opts_list):
@@ -77,6 +84,14 @@ class SDRPCServer:
         else:
             raise ValueError(f"unknown model '{model_req}' with hash {model_hash}")
 
+        mopts = FakeOpts(shared.opts)
+
+        mopts.save = False
+        mopts.samples_save = False
+        mopts.grid_save = False
+        mopts.return_grid = False
+        mopts.face_restoration_model = 'GFPGAN'
+
         p = StableDiffusionProcessingTxt2Img(
             outpath_samples=".",
             outpath_grids=".",
@@ -97,9 +112,11 @@ class SDRPCServer:
             height=opts.pop('height', 512),
             restore_faces=opts.pop('restore_faces', 0),
             tiling=opts.pop('tiling', 0),
-            do_not_save_samples=True,
-            do_not_save_grid=True,
         )
+
+        if p.restore_faces == 2:
+            mopts.face_restoration_model = "CodeFormer"
+            mopts.code_former_weight = opts.pop('cf_strength', 0.2)
 
         upscale = opts.pop('upscale', False)
         opt_split_attention = opts.pop('opt1', False)
@@ -135,7 +152,7 @@ class SDRPCServer:
                     old_model.to(devices.cpu)
                     devices.torch_gc()
                 p.sd_model = shared.sd_model
-                processed = process_images(p)
+                processed = process_images(p, opts=mopts)
                 if upscale:
                     p2 = StableDiffusionProcessingImg2Img(
                         outpath_samples=".",
@@ -163,7 +180,7 @@ class SDRPCServer:
                         denoising_strength=upscale_denoising_strength,
                     )
                     upscaleproc = scripts.sd_upscale.Script().run(
-                        p2, None, 64, upscaler_to_index['r-esrgan 2x+'])
+                        p2, None, 64, upscaler_to_index['r-esrgan 2x+'], opts=mopts)
                     processed.images = upscaleproc.images
                 shared.total_tqdm.clear()
         finally:

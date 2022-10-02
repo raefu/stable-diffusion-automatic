@@ -6,7 +6,7 @@ from PIL import Image
 
 from modules import processing, shared, sd_samplers, images, devices
 from modules.processing import Processed
-from modules.shared import opts, cmd_opts, state
+from modules.shared import state
 
 
 class Script(scripts.Script):
@@ -23,7 +23,7 @@ class Script(scripts.Script):
 
         return [info, overlap, upscaler_index]
 
-    def run(self, p, _, overlap, upscaler_index):
+    def run(self, p, _, overlap, upscaler_index, opts=shared.opts):
         processing.fix_seed(p)
         upscaler = shared.sd_upscalers[upscaler_index]
 
@@ -68,7 +68,7 @@ class Script(scripts.Script):
                 p.init_images = work[i*batch_size:(i+1)*batch_size]
 
                 state.job = f"Batch {i + 1 + n * batch_count} out of {state.job_count}"
-                processed = processing.process_images(p)
+                processed = processing.process_images(p, opts=opts)
 
                 if initial_info is None:
                     initial_info = processed.info
