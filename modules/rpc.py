@@ -74,6 +74,7 @@ class SDRPCServer:
         model_hash = {
             'model': '44ef7ed9',
             'waifu': 'e393dbe0',
+            'waifu13': 'b6d184f6',
             'gg1342': '13d7b26b',
         }[model_req]
         model_ckpt = None

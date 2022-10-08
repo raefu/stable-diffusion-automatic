@@ -85,6 +85,9 @@ shared.opts.onchange("sd_model_checkpoint", wrap_queued_call(lambda: modules.sd_
 # preload wd-v1-2-full-ema-pruned.ckpt
 wd = modules.sd_models.select_checkpoint('e393dbe0')
 wd and modules.sd_models.load_model(wd).to(devices.cpu)
+# preload wd-v1-3-float16.ckpt
+wd13 = modules.sd_models.select_checkpoint('b6d184f6')
+wd13 and modules.sd_models.load_model(wd13).to(devices.cpu)
 # preload gg1342_testrun1_pruned.ckpt
 gg = modules.sd_models.select_checkpoint('13d7b26b')
 gg and modules.sd_models.load_model(gg).to(devices.cpu)
