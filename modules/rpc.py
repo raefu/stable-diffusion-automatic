@@ -1,6 +1,7 @@
 import contextlib
 import io
 import os
+import signal
 import subprocess
 import threading
 import time
@@ -27,6 +28,9 @@ class FakeOpts:
 class SDRPCServer:
     def __init__(self, queue_lock):
         self.queue_lock = queue_lock
+
+    def quit(self, _):
+        os.kill(os.getpid(), signal.SIGINT)
 
     def ping(self, n):
         return n + 1
