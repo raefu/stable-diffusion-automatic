@@ -38,8 +38,10 @@ class SDRPCServer:
     def caps(self, _):
         try:
             rev = subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode('utf8').strip()
+            revn = subprocess.check_output(['git', 'rev-list', '--count', 'HEAD']).decode('utf8').strip()
         except subprocess.CalledProcessError:
-            rev = None
+            rev = ''
+            revn = 0
 
         device_name = 'unknown'
         device_total_ram = 0
@@ -54,8 +56,9 @@ class SDRPCServer:
             pass
 
         return {
-            'git-rev': rev,
+            'git-rev': f'r{revn}-{rev}',
             'device': device_name,
+            'xformers': shared.xformers_available,
             'vram_total': round(device_total_ram / 1024 ** 3, 2),
             'vram_used': round(device_used_ram / 1024 ** 3, 2),
             'checkpoints': {c.hash: c.model_name for c in sd_models.checkpoints_list.values()},
