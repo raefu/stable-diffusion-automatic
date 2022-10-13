@@ -210,7 +210,7 @@ class SDRPCServer:
             'extra_generation_params', 'index_of_first_image', 'all_prompts', 'all_seeds', 'all_subseeds',
             'face_restoration_model', 'restore_faces', 'batch_size', 'upscale', 'n_iter', 'width', 'height',
             'steps', 'sampler', 'cfg_scale', 'sd_model_hash', 'eta', 'ddim_discretize', 's_churn', 's_tmin',
-            's_tmax', 's_noise', 'infotexts'):
+            's_tmax', 's_noise', 'infotexts', 'clip_skip', 'job_timestamp', 'styles', 'sampler_noise_schedule_override'):
             ret.pop(k, None)
 
         if not ret['vram_used']:
