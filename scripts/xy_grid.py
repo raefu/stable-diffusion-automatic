@@ -1,7 +1,9 @@
 from collections import namedtuple
 from copy import copy
+from itertools import permutations, chain
 import random
-
+import csv
+from io import StringIO
 from PIL import Image
 import numpy as np
 
@@ -9,7 +11,8 @@ import modules.scripts as scripts
 import gradio as gr
 
 from modules import images
-from modules.processing import process_images, Processed
+from modules.hypernetworks import hypernetwork
+from modules.processing import process_images, Processed, get_correct_sampler
 from modules.shared import opts, cmd_opts, state
 import modules.shared as shared
 import modules.sd_samplers
@@ -25,29 +28,95 @@ def apply_field(field):
 
 
 def apply_prompt(p, x, xs):
+    if xs[0] not in p.prompt and xs[0] not in p.negative_prompt:
+        raise RuntimeError(f"Prompt S/R did not find {xs[0]} in prompt or negative prompt.")
+
     p.prompt = p.prompt.replace(xs[0], x)
     p.negative_prompt = p.negative_prompt.replace(xs[0], x)
 
 
-samplers_dict = {}
-for i, sampler in enumerate(modules.sd_samplers.samplers):
-    samplers_dict[sampler.name.lower()] = i
-    for alias in sampler.aliases:
-        samplers_dict[alias.lower()] = i
+def apply_order(p, x, xs):
+    token_order = []
+
+    # Initally grab the tokens from the prompt, so they can be replaced in order of earliest seen
+    for token in x:
+        token_order.append((p.prompt.find(token), token))
+
+    token_order.sort(key=lambda t: t[0])
+
+    prompt_parts = []
+
+    # Split the prompt up, taking out the tokens
+    for _, token in token_order:
+        n = p.prompt.find(token)
+        prompt_parts.append(p.prompt[0:n])
+        p.prompt = p.prompt[n + len(token):]
+
+    # Rebuild the prompt with the tokens in the order we want
+    prompt_tmp = ""
+    for idx, part in enumerate(prompt_parts):
+        prompt_tmp += part
+        prompt_tmp += x[idx]
+    p.prompt = prompt_tmp + p.prompt
+    
+
+def build_samplers_dict(p):
+    samplers_dict = {}
+    for i, sampler in enumerate(get_correct_sampler(p)):
+        samplers_dict[sampler.name.lower()] = i
+        for alias in sampler.aliases:
+            samplers_dict[alias.lower()] = i
+    return samplers_dict
 
 
 def apply_sampler(p, x, xs):
-    sampler_index = samplers_dict.get(x.lower(), None)
+    sampler_index = build_samplers_dict(p).get(x.lower(), None)
     if sampler_index is None:
         raise RuntimeError(f"Unknown sampler: {x}")
 
     p.sampler_index = sampler_index
 
 
+def confirm_samplers(p, xs):
+    samplers_dict = build_samplers_dict(p)
+    for x in xs:
+        if x.lower() not in samplers_dict.keys():
+            raise RuntimeError(f"Unknown sampler: {x}")
+
+
 def apply_checkpoint(p, x, xs):
     info = modules.sd_models.get_closet_checkpoint_match(x)
-    assert info is not None, f'Checkpoint for {x} not found'
+    if info is None:
+        raise RuntimeError(f"Unknown checkpoint: {x}")
     modules.sd_models.reload_model_weights(shared.sd_model, info)
+
+
+def confirm_checkpoints(p, xs):
+    for x in xs:
+        if modules.sd_models.get_closet_checkpoint_match(x) is None:
+            raise RuntimeError(f"Unknown checkpoint: {x}")
+
+
+def apply_hypernetwork(p, x, xs):
+    if x.lower() in ["", "none"]:
+        name = None
+    else:
+        name = hypernetwork.find_closest_hypernetwork_name(x)
+        if not name:
+            raise RuntimeError(f"Unknown hypernetwork: {x}")
+    hypernetwork.load_hypernetwork(name)
+
+
+def confirm_hypernetworks(p, xs):
+    for x in xs:
+        if x.lower() in ["", "none"]:
+            continue
+        if not hypernetwork.find_closest_hypernetwork_name(x):
+            raise RuntimeError(f"Unknown hypernetwork: {x}")
+
+
+def apply_clip_skip(p, x, xs):
+    opts.data["CLIP_stop_at_last_layers"] = x
 
 
 def format_value_add_label(p, opt, x):
@@ -60,36 +129,49 @@ def format_value_add_label(p, opt, x):
 def format_value(p, opt, x):
     if type(x) == float:
         x = round(x, 8)
-
     return x
+
+
+def format_value_join_list(p, opt, x):
+    return ", ".join(x)
+
 
 def do_nothing(p, x, xs):
     pass
+
 
 def format_nothing(p, opt, x):
     return ""
 
 
-AxisOption = namedtuple("AxisOption", ["label", "type", "apply", "format_value"])
-AxisOptionImg2Img = namedtuple("AxisOptionImg2Img", ["label", "type", "apply", "format_value"])
+def str_permutations(x):
+    """dummy function for specifying it in AxisOption's type when you want to get a list of permutations"""
+    return x
+
+
+AxisOption = namedtuple("AxisOption", ["label", "type", "apply", "format_value", "confirm"])
+AxisOptionImg2Img = namedtuple("AxisOptionImg2Img", ["label", "type", "apply", "format_value", "confirm"])
 
 
 axis_options = [
-    AxisOption("Nothing", str, do_nothing, format_nothing),
-    AxisOption("Seed", int, apply_field("seed"), format_value_add_label),
-    AxisOption("Var. seed", int, apply_field("subseed"), format_value_add_label),
-    AxisOption("Var. strength", float, apply_field("subseed_strength"), format_value_add_label),
-    AxisOption("Steps", int, apply_field("steps"), format_value_add_label),
-    AxisOption("CFG Scale", float, apply_field("cfg_scale"), format_value_add_label),
-    AxisOption("Prompt S/R", str, apply_prompt, format_value),
-    AxisOption("Sampler", str, apply_sampler, format_value),
-    AxisOption("Checkpoint name", str, apply_checkpoint, format_value),
-    AxisOption("Sigma Churn", float, apply_field("s_churn"), format_value_add_label),
-    AxisOption("Sigma min", float, apply_field("s_tmin"), format_value_add_label),
-    AxisOption("Sigma max", float, apply_field("s_tmax"), format_value_add_label),
-    AxisOption("Sigma noise", float, apply_field("s_noise"), format_value_add_label),
-    AxisOption("Eta", float, apply_field("eta"), format_value_add_label),
-    AxisOptionImg2Img("Denoising", float, apply_field("denoising_strength"), format_value_add_label),  # as it is now all AxisOptionImg2Img items must go after AxisOption ones
+    AxisOption("Nothing", str, do_nothing, format_nothing, None),
+    AxisOption("Seed", int, apply_field("seed"), format_value_add_label, None),
+    AxisOption("Var. seed", int, apply_field("subseed"), format_value_add_label, None),
+    AxisOption("Var. strength", float, apply_field("subseed_strength"), format_value_add_label, None),
+    AxisOption("Steps", int, apply_field("steps"), format_value_add_label, None),
+    AxisOption("CFG Scale", float, apply_field("cfg_scale"), format_value_add_label, None),
+    AxisOption("Prompt S/R", str, apply_prompt, format_value, None),
+    AxisOption("Prompt order", str_permutations, apply_order, format_value_join_list, None),
+    AxisOption("Sampler", str, apply_sampler, format_value, confirm_samplers),
+    AxisOption("Checkpoint name", str, apply_checkpoint, format_value, confirm_checkpoints),
+    AxisOption("Hypernetwork", str, apply_hypernetwork, format_value, confirm_hypernetworks),
+    AxisOption("Sigma Churn", float, apply_field("s_churn"), format_value_add_label, None),
+    AxisOption("Sigma min", float, apply_field("s_tmin"), format_value_add_label, None),
+    AxisOption("Sigma max", float, apply_field("s_tmax"), format_value_add_label, None),
+    AxisOption("Sigma noise", float, apply_field("s_noise"), format_value_add_label, None),
+    AxisOption("Eta", float, apply_field("eta"), format_value_add_label, None),
+    AxisOption("Clip skip", int, apply_clip_skip, format_value_add_label, None),
+    AxisOptionImg2Img("Denoising", float, apply_field("denoising_strength"), format_value_add_label, None),  # as it is now all AxisOptionImg2Img items must go after AxisOption ones
 ]
 
 
@@ -99,7 +181,7 @@ def draw_xy_grid(p, xs, ys, x_labels, y_labels, cell, draw_legend):
     ver_texts = [[images.GridAnnotation(y)] for y in y_labels]
     hor_texts = [[images.GridAnnotation(x)] for x in x_labels]
 
-    first_pocessed = None
+    first_processed = None
 
     state.job_count = len(xs) * len(ys) * p.n_iter
 
@@ -108,8 +190,8 @@ def draw_xy_grid(p, xs, ys, x_labels, y_labels, cell, draw_legend):
             state.job = f"{ix + iy * len(xs) + 1} out of {len(xs) * len(ys)}"
 
             processed = cell(x, y)
-            if first_pocessed is None:
-                first_pocessed = processed
+            if first_processed is None:
+                first_processed = processed
 
             try:
               res.append(processed.images[0])
@@ -120,9 +202,9 @@ def draw_xy_grid(p, xs, ys, x_labels, y_labels, cell, draw_legend):
     if draw_legend:
         grid = images.draw_grid_annotations(grid, res[0].width, res[0].height, hor_texts, ver_texts)
 
-    first_pocessed.images = [grid]
+    first_processed.images = [grid]
 
-    return first_pocessed
+    return first_processed
 
 
 re_range = re.compile(r"\s*([+-]?\s*\d+)\s*-\s*([+-]?\s*\d+)(?:\s*\(([+-]\d+)\s*\))?\s*")
@@ -143,7 +225,7 @@ class Script(scripts.Script):
             x_values = gr.Textbox(label="X values", visible=False, lines=1)
 
         with gr.Row():
-            y_type = gr.Dropdown(label="Y type", choices=[x.label for x in current_axis_options], value=current_axis_options[4].label, visible=False, type="index", elem_id="y_type")
+            y_type = gr.Dropdown(label="Y type", choices=[x.label for x in current_axis_options], value=current_axis_options[0].label, visible=False, type="index", elem_id="y_type")
             y_values = gr.Textbox(label="Y values", visible=False, lines=1)
         
         draw_legend = gr.Checkbox(label='Draw legend', value=True)
@@ -152,14 +234,20 @@ class Script(scripts.Script):
         return [x_type, x_values, y_type, y_values, draw_legend, no_fixed_seeds]
 
     def run(self, p, x_type, x_values, y_type, y_values, draw_legend, no_fixed_seeds):
-        modules.processing.fix_seed(p)
-        p.batch_size = 1
+        if not no_fixed_seeds:
+            modules.processing.fix_seed(p)
+
+        if not opts.return_grid:
+            p.batch_size = 1
+
+
+        CLIP_stop_at_last_layers = opts.CLIP_stop_at_last_layers
 
         def process_axis(opt, vals):
             if opt.label == 'Nothing':
                 return [0]
 
-            valslist = [x.strip() for x in vals.split(",")]
+            valslist = [x.strip() for x in chain.from_iterable(csv.reader(StringIO(vals)))]
 
             if opt.type == int:
                 valslist_ext = []
@@ -168,7 +256,6 @@ class Script(scripts.Script):
                     m = re_range.fullmatch(val)
                     mc = re_range_count.fullmatch(val)
                     if m is not None:
-
                         start = int(m.group(1))
                         end = int(m.group(2))+1
                         step = int(m.group(3)) if m.group(3) is not None else 1
@@ -206,8 +293,14 @@ class Script(scripts.Script):
                         valslist_ext.append(val)
 
                 valslist = valslist_ext
+            elif opt.type == str_permutations:
+                valslist = list(permutations(valslist))
 
             valslist = [opt.type(x) for x in valslist]
+
+            # Confirm options are valid before starting
+            if opt.confirm:
+                opt.confirm(p, valslist)
 
             return valslist
 
@@ -259,5 +352,9 @@ class Script(scripts.Script):
 
         # restore checkpoint in case it was changed by axes
         modules.sd_models.reload_model_weights(shared.sd_model)
+
+        hypernetwork.load_hypernetwork(opts.sd_hypernetwork)
+
+        opts.data["CLIP_stop_at_last_layers"] = CLIP_stop_at_last_layers
 
         return processed

@@ -101,7 +101,8 @@ function create_tab_index_args(tabId, args){
 }
 
 function get_extras_tab_index(){
-    return create_tab_index_args('mode_extras', arguments)
+    const [,,...args] = [...arguments]
+    return [get_tab_index('mode_extras'), get_tab_index('extras_resize_mode'), ...args]
 }
 
 function create_submit_args(args){
@@ -199,6 +200,26 @@ let txt2img_textarea, img2img_textarea = undefined;
 let wait_time = 800
 let token_timeout;
 
+function update_txt2img_tokens(...args) {
+	update_token_counter("txt2img_token_button")
+	if (args.length == 2)
+		return args[0]
+	return args;
+}
+
+function update_img2img_tokens(...args) {
+	update_token_counter("img2img_token_button")
+	if (args.length == 2)
+		return args[0]
+	return args;
+}
+
+function update_token_counter(button_id) {
+	if (token_timeout)
+		clearTimeout(token_timeout);
+	token_timeout = setTimeout(() => gradioApp().getElementById(button_id)?.click(), wait_time);
+}
+
 function submit_prompt(event, generate_button_id) {
     if (event.altKey && event.keyCode === 13) {
         event.preventDefault();
@@ -207,8 +228,7 @@ function submit_prompt(event, generate_button_id) {
     }
 }
 
-function update_token_counter(button_id) {
-	if (token_timeout)
-		clearTimeout(token_timeout);
-	token_timeout = setTimeout(() => gradioApp().getElementById(button_id)?.click(), wait_time);
+function restart_reload(){
+    document.body.innerHTML='<h1 style="font-family:monospace;margin-top:20%;color:lightgray;text-align:center;">Reloading...</h1>';
+    setTimeout(function(){location.reload()},2000)
 }
