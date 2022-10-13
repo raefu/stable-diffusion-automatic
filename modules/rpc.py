@@ -124,7 +124,7 @@ class SDRPCServer:
             mopts.code_former_weight = opts.pop('cf_strength', 0.2)
 
         upscale = opts.pop('upscale', False)
-        opt_split_attention = opts.pop('opt1', False)
+        quirks = opts.pop('quirks', [])
 
         upscale_steps = opts.pop('upscale_steps', 20)
         upscale_denoising_strength = opts.pop('denoise_strength', 0.2)
@@ -147,8 +147,8 @@ class SDRPCServer:
         try:
             monitor.start()
 
-            with self.queue_lock if lock else nullcontext, \
-                    sd_hijack.opt_split_attention() if opt_split_attention else nullcontext:
+            with self.queue_lock if lock else nullcontext:
+                shared.opts.use_old_emphasis_implementation = 'oldemphasis' in quirks
                 start = time.time()
                 if shared.sd_model.sd_model_hash != model_ckpt.hash:
                     old_model = shared.sd_model
@@ -206,11 +206,15 @@ class SDRPCServer:
             ret.pop('subseed')
             ret.pop('subseed_strength')
         # remove unnecessary repetition in the response
-        for k in ('sampler_index', 'seed_resize_from_w', 'seed_resize_from_h', 'denoising_strength',
-            'extra_generation_params', 'index_of_first_image', 'all_prompts', 'all_seeds', 'all_subseeds',
-            'face_restoration_model', 'restore_faces', 'batch_size', 'upscale', 'n_iter', 'width', 'height',
-            'steps', 'sampler', 'cfg_scale', 'sd_model_hash', 'eta', 'ddim_discretize', 's_churn', 's_tmin',
-            's_tmax', 's_noise', 'infotexts', 'clip_skip', 'job_timestamp', 'styles', 'sampler_noise_schedule_override'):
+        for k in ('sampler_index', 'seed_resize_from_w', 'seed_resize_from_h',
+                  'denoising_strength', 'extra_generation_params',
+                  'index_of_first_image', 'all_prompts', 'all_seeds',
+                  'all_subseeds', 'face_restoration_model', 'restore_faces',
+                  'batch_size', 'upscale', 'n_iter', 'width', 'height',
+                  'steps', 'sampler', 'cfg_scale', 'sd_model_hash', 'eta',
+                  'ddim_discretize', 's_churn', 's_tmin', 's_tmax', 's_noise',
+                  'infotexts', 'clip_skip', 'job_timestamp', 'styles',
+                  'sampler_noise_scheduler_override'):
             ret.pop(k, None)
 
         if not ret['vram_used']:

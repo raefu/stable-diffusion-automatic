@@ -1,12 +1,9 @@
-import contextlib
 import math
 import os
 import sys
 import traceback
 import torch
 import numpy as np
-from torch import einsum, nn
-from inspect import isfunction
 from torch import einsum
 from torch.nn.functional import silu
 
@@ -117,22 +114,6 @@ class StableDiffusionModelHijack:
         _, remade_batch_tokens, _, _, _, token_count = self.clip.process_text([text])
         return remade_batch_tokens[0], token_count, get_target_prompt_token_count(token_count)
 
-@contextlib.contextmanager
-def opt_split_attention():
-    orig_nonlinearity = ldm.modules.diffusionmodules.model.nonlinearity
-    orig_attn_forward = ldm.modules.diffusionmodules.model.AttnBlock.forward
-    orig_crossattention_forward = ldm.modules.attention.CrossAttention.forward
-
-    try:
-        if ldm.modules.attention.CrossAttention != MemoryEfficientCrossAttention:
-            ldm.modules.attention.CrossAttention.forward = split_cross_attention_forward
-        ldm.modules.diffusionmodules.model.nonlinearity = nonlinearity_hijack
-        ldm.modules.diffusionmodules.model.AttnBlock.forward = cross_attention_attnblock_forward
-        yield
-    finally:
-        ldm.modules.attention.CrossAttention.forward = orig_crossattention_forward
-        ldm.modules.diffusionmodules.model.nonlinearity = orig_nonlinearity
-        ldm.modules.diffusionmodules.model.AttnBlock.forward = orig_attn_forward
 
 class FrozenCLIPEmbedderWithCustomWords(torch.nn.Module):
     def __init__(self, wrapped, hijack):
@@ -191,11 +172,11 @@ class FrozenCLIPEmbedderWithCustomWords(torch.nn.Module):
 
                     remade_tokens = remade_tokens[:last_comma]
                     length = len(remade_tokens)
-
+                    
                     rem = int(math.ceil(length / 75)) * 75 - length
                     remade_tokens += [id_end] * rem + reloc_tokens
                     multipliers = multipliers[:last_comma] + [1.0] * rem + reloc_mults
-
+                
                 if embedding is None:
                     remade_tokens.append(token)
                     multipliers.append(weight)
@@ -314,7 +295,7 @@ class FrozenCLIPEmbedderWithCustomWords(torch.nn.Module):
             hijack_fixes.append(fixes)
             batch_multipliers.append(multipliers)
         return batch_multipliers, remade_batch_tokens, used_custom_terms, hijack_comments, hijack_fixes, token_count
-
+    
     def forward(self, text):
         use_old = opts.use_old_emphasis_implementation
         if use_old:
@@ -326,11 +307,11 @@ class FrozenCLIPEmbedderWithCustomWords(torch.nn.Module):
 
         if len(used_custom_terms) > 0:
             self.hijack.comments.append("Used embeddings: " + ", ".join([f'{word} [{checksum}]' for word, checksum in used_custom_terms]))
-
+        
         if use_old:
             self.hijack.fixes = hijack_fixes
             return self.process_tokens(remade_batch_tokens, batch_multipliers)
-
+        
         z = None
         i = 0
         while max(map(len, remade_batch_tokens)) != 0:
@@ -344,7 +325,7 @@ class FrozenCLIPEmbedderWithCustomWords(torch.nn.Module):
                     if fix[0] == i:
                         fixes.append(fix[1])
                 self.hijack.fixes.append(fixes)
-
+            
             tokens = []
             multipliers = []
             for j in range(len(remade_batch_tokens)):
@@ -357,19 +338,19 @@ class FrozenCLIPEmbedderWithCustomWords(torch.nn.Module):
 
             z1 = self.process_tokens(tokens, multipliers)
             z = z1 if z is None else torch.cat((z, z1), axis=-2)
-
+            
             remade_batch_tokens = rem_tokens
             batch_multipliers = rem_multipliers
             i += 1
-
+        
         return z
-
-
+        
+    
     def process_tokens(self, remade_batch_tokens, batch_multipliers):
         if not opts.use_old_emphasis_implementation:
             remade_batch_tokens = [[self.wrapped.tokenizer.bos_token_id] + x[:75] + [self.wrapped.tokenizer.eos_token_id] for x in remade_batch_tokens]
             batch_multipliers = [[1.0] + x[:75] + [1.0] for x in batch_multipliers]
-
+        
         tokens = torch.asarray(remade_batch_tokens).to(device)
         outputs = self.wrapped.transformer(input_ids=tokens, output_hidden_states=-opts.CLIP_stop_at_last_layers)
 
