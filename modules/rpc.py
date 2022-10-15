@@ -146,19 +146,13 @@ class SDRPCServer:
             p.restore_faces = False
 
         monitor = memmonitor.MemUsageMonitor()
-        processed2 = None
         try:
             monitor.start()
 
             with self.queue_lock if lock else nullcontext:
                 shared.opts.use_old_emphasis_implementation = 'oldemphasis' in quirks
+                sd_models.reload_model_weights(shared.sd_model, model_ckpt)
                 start = time.time()
-                if shared.sd_model.sd_model_hash != model_ckpt.hash:
-                    old_model = shared.sd_model
-                    shared.sd_model = sd_models.load_model(model_ckpt)
-                    shared.sd_model.to(shared.device)
-                    old_model.to(devices.cpu)
-                    devices.torch_gc()
                 p.sd_model = shared.sd_model
                 processed = process_images(p, opts=mopts)
                 if upscale:

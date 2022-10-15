@@ -75,8 +75,10 @@ def wrap_gradio_gpu_call(func, extra_outputs=None):
 
     return modules.ui.wrap_gradio_call(f, extra_outputs=extra_outputs)
 
-
 def initialize():
+    if 'R-ESRGAN 2x+' not in shared.opts.realesrgan_enabled_models:
+        shared.opts.realesrgan_enabled_models.append('R-ESRGAN 2x+')
+
     modelloader.cleanup_models()
     modules.sd_models.setup_model()
     codeformer.setup_model(cmd_opts.codeformer_models_path)
@@ -91,20 +93,19 @@ def initialize():
     shared.sd_model = modules.sd_models.load_model()
     shared.opts.onchange("sd_model_checkpoint", wrap_queued_call(lambda: modules.sd_models.reload_model_weights(shared.sd_model)))
     shared.opts.onchange("sd_hypernetwork", wrap_queued_call(lambda: modules.hypernetworks.hypernetwork.load_hypernetwork(shared.opts.sd_hypernetwork)))
+    shared.opts.onchange("sd_hypernetwork_strength", modules.hypernetworks.hypernetwork.apply_strength)
 
+    shared.opts.sd_checkpoint_cache = max(10, shared.opts.sd_checkpoint_cache)
     if not os.getenv("NO_PRELOAD"):
         # preload wd-v1-2-full-ema-pruned.ckpt
-        wd = modules.sd_models.select_checkpoint('e393dbe0')
-        wd and modules.sd_models.load_model(wd).to(devices.cpu)
+        wd = modules.sd_models.select_checkpoint_by_hash('e393dbe0')
+        wd and modules.sd_models.reload_model_weights(shared.sd_model, wd)
         # preload wd-v1-3-float16.ckpt
-        wd13 = modules.sd_models.select_checkpoint('b6d184f6')
-        wd13 and modules.sd_models.load_model(wd13).to(devices.cpu)
+        wd13 = modules.sd_models.select_checkpoint_by_hash('b6d184f6')
+        wd13 and modules.sd_models.reload_model_weights(shared.sd_model, wd13)
         # preload gg1342_testrun1_pruned.ckpt
-        gg = modules.sd_models.select_checkpoint('13d7b26b')
-        gg and modules.sd_models.load_model(gg).to(devices.cpu)
-
-    # ensure the currently loaded model is on the gpu
-    shared.sd_model.to(shared.device)
+        gg = modules.sd_models.select_checkpoint_by_hash('13d7b26b')
+        gg and modules.sd_models.reload_model_weights(shared.sd_model, gg)
 
 
 def webui():

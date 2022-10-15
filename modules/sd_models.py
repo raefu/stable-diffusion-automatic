@@ -1,4 +1,4 @@
-import glob
+import collections
 import os.path
 import sys
 from collections import namedtuple
@@ -15,7 +15,7 @@ model_path = os.path.abspath(os.path.join(models_path, model_dir))
 
 CheckpointInfo = namedtuple("CheckpointInfo", ['filename', 'title', 'hash', 'model_name', 'config'])
 checkpoints_list = {}
-checkpoints_loaded = {}
+checkpoints_loaded = collections.OrderedDict()
 
 try:
     # this silences the annoying "Some weights of the model checkpoint were not used when initializing..." message at start.
@@ -102,13 +102,15 @@ def model_hash(filename):
         return 'NOFILE'
 
 
-def select_checkpoint(model_hash=None):
+def select_checkpoint_by_hash(model_hash):
     if model_hash:
         for c in checkpoints_list.values():
             if c.hash == model_hash:
                 return c
         return None
 
+
+def select_checkpoint(info=None):
     model_checkpoint = shared.opts.sd_model_checkpoint
     checkpoint_info = checkpoints_list.get(model_checkpoint, None)
     if checkpoint_info is not None:
@@ -142,67 +144,72 @@ def load_model_weights(model, checkpoint_info):
     checkpoint_file = checkpoint_info.filename
     sd_model_hash = checkpoint_info.hash
 
-    print(f"Loading weights [{sd_model_hash}] from {checkpoint_file}")
+    if checkpoint_info not in checkpoints_loaded:
+        print(f"Loading weights [{sd_model_hash}] from {checkpoint_file}")
 
-    pl_sd = torch.load(checkpoint_file, map_location="cpu")
-    if "global_step" in pl_sd:
-        print(f"Global Step: {pl_sd['global_step']}")
+        pl_sd = torch.load(checkpoint_file, map_location=shared.weight_load_location)
+        if "global_step" in pl_sd:
+            print(f"Global Step: {pl_sd['global_step']}")
 
-    sd = get_state_dict_from_checkpoint(pl_sd)
+        sd = get_state_dict_from_checkpoint(pl_sd)
+        model.load_state_dict(sd, strict=False)
 
-    model.load_state_dict(sd, strict=False)
+        if shared.cmd_opts.opt_channelslast:
+            model.to(memory_format=torch.channels_last)
 
-    if shared.cmd_opts.opt_channelslast:
-        model.to(memory_format=torch.channels_last)
+        if not shared.cmd_opts.no_half:
+            model.half()
 
-    if not shared.cmd_opts.no_half:
-        model.half()
+        devices.dtype = torch.float32 if shared.cmd_opts.no_half else torch.float16
+        devices.dtype_vae = torch.float32 if shared.cmd_opts.no_half or shared.cmd_opts.no_half_vae else torch.float16
 
-    devices.dtype = torch.float32 if shared.cmd_opts.no_half else torch.float16
-    devices.dtype_vae = torch.float32 if shared.cmd_opts.no_half or shared.cmd_opts.no_half_vae else torch.float16
+        vae_file = os.path.splitext(checkpoint_file)[0] + ".vae.pt"
 
-    vae_file = os.path.splitext(checkpoint_file)[0] + ".vae.pt"
+        if not os.path.exists(vae_file) and shared.cmd_opts.vae_path is not None:
+            vae_file = shared.cmd_opts.vae_path
 
-    if not os.path.exists(vae_file) and shared.cmd_opts.vae_path is not None:
-        vae_file = shared.cmd_opts.vae_path
+        if os.path.exists(vae_file):
+            print(f"Loading VAE weights from: {vae_file}")
+            vae_ckpt = torch.load(vae_file, map_location=shared.weight_load_location)
+            vae_dict = {k: v for k, v in vae_ckpt["state_dict"].items() if k[0:4] != "loss"}
+            model.first_stage_model.load_state_dict(vae_dict)
 
-    if os.path.exists(vae_file):
-        print(f"Loading VAE weights from: {vae_file}")
-        vae_ckpt = torch.load(vae_file, map_location="cpu")
-        vae_dict = {k: v for k, v in vae_ckpt["state_dict"].items() if k[0:4] != "loss"}
+        model.first_stage_model.to(devices.dtype_vae)
 
-        model.first_stage_model.load_state_dict(vae_dict)
-
-    model.first_stage_model.to(devices.dtype_vae)
+        checkpoints_loaded[checkpoint_info] = model.state_dict().copy()
+        while len(checkpoints_loaded) > shared.opts.sd_checkpoint_cache:
+            checkpoints_loaded.popitem(last=False)  # LRU
+    else:
+        print(f"Loading weights {checkpoint_info.title} from cache")
+        checkpoints_loaded.move_to_end(checkpoint_info)
+        model.load_state_dict(checkpoints_loaded[checkpoint_info])
 
     model.sd_model_hash = sd_model_hash
     model.sd_model_checkpoint = checkpoint_file
     model.sd_checkpoint_info = checkpoint_info
 
 
-def load_model(cinf=None):
+def load_model():
     from modules import lowvram, sd_hijack
-    checkpoint_info = cinf or select_checkpoint()
+    checkpoint_info = select_checkpoint()
 
-    if checkpoint_info not in checkpoints_loaded:
-        sd_config = OmegaConf.load(shared.cmd_opts.config)
-        sd_model = instantiate_from_config(sd_config.model)
-        load_model_weights(sd_model, checkpoint_info)
+    if checkpoint_info.config != shared.cmd_opts.config:
+        print(f"Loading config from: {checkpoint_info.config}")
 
-        if shared.cmd_opts.lowvram or shared.cmd_opts.medvram:
-            lowvram.setup_for_low_vram(sd_model, shared.cmd_opts.medvram)
-        else:
-            sd_model.to(shared.device)
+    sd_config = OmegaConf.load(checkpoint_info.config)
+    sd_model = instantiate_from_config(sd_config.model)
+    load_model_weights(sd_model, checkpoint_info)
 
-        sd_hijack.model_hijack.hijack(sd_model)
-        sd_model.eval()
-        checkpoints_loaded[checkpoint_info] = sd_model
-        print(f"Model {checkpoint_info.hash} loaded.")
+    if shared.cmd_opts.lowvram or shared.cmd_opts.medvram:
+        lowvram.setup_for_low_vram(sd_model, shared.cmd_opts.medvram)
     else:
-        sd_model = checkpoints_loaded[checkpoint_info]
-        sd_hijack.model_hijack.hijack(sd_model)
-        print(f"Model {checkpoint_info.hash} loaded. (Cached)")
+        sd_model.to(shared.device)
 
+    sd_hijack.model_hijack.hijack(sd_model)
+
+    sd_model.eval()
+
+    print(f"Model loaded.")
     return sd_model
 
 
@@ -214,6 +221,7 @@ def reload_model_weights(sd_model, info=None):
         return
 
     if sd_model.sd_checkpoint_info.config != checkpoint_info.config:
+        checkpoints_loaded.clear()
         shared.sd_model = load_model()
         return shared.sd_model
 
