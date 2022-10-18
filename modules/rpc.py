@@ -84,6 +84,7 @@ class SDRPCServer:
             'waifu': 'e393dbe0',
             'waifu13': 'b6d184f6',
             'gg1342': '13d7b26b',
+            'yiffy': 'abc85c2f',  # e18
         }[model_req]
         model_ckpt = None
         for ckpt in sd_models.checkpoints_list.values():
