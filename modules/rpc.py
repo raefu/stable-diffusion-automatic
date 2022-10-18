@@ -75,6 +75,7 @@ class SDRPCServer:
 
     def txt2img(self, opts, lock=True):
         sampler_to_index = {s.name.lower(): n for n, s in enumerate(samplers.samplers)}
+        sampler_i2i_to_index = {s.name.lower(): n for n, s in enumerate(samplers.samplers_for_img2img)}
         upscaler_to_index = {s.name.lower(): n for n, s in enumerate(shared.sd_upscalers)}
 
         model_req = opts.pop('model', 'model')
@@ -100,6 +101,7 @@ class SDRPCServer:
         mopts.return_grid = False
         mopts.face_restoration_model = 'GFPGAN'
 
+        sampler = opts.pop('sampler', 'lms').lower()
         p = StableDiffusionProcessingTxt2Img(
             outpath_samples=".",
             outpath_grids=".",
@@ -111,7 +113,7 @@ class SDRPCServer:
             subseed_strength=opts.pop('subseed_strength', 0),
             seed_resize_from_h=opts.pop('seed_resize_from_h', 0),
             seed_resize_from_w=opts.pop('seed_resize_from_w', 0),
-            sampler_index=sampler_to_index[opts.pop('sampler', 'lms').lower()],
+            sampler_index=sampler_to_index[sampler],
             batch_size=opts.pop('batch_size', 1),
             n_iter=opts.pop('n_iter', 1),
             steps=opts.pop('steps', 0),
@@ -159,7 +161,6 @@ class SDRPCServer:
                     p2 = StableDiffusionProcessingImg2Img(
                         outpath_samples=".",
                         outpath_grids=".",
-
                         sd_model=shared.sd_model,
                         prompt=p.prompt,
                         negative_prompt=p.negative_prompt,
@@ -169,7 +170,8 @@ class SDRPCServer:
                         subseed_strength=p.subseed_strength,
                         seed_resize_from_h=p.seed_resize_from_h,
                         seed_resize_from_w=p.seed_resize_from_w,
-                        sampler_index=p.sampler_index,
+                        sampler_index=sampler_i2i_to_index.get(sampler,
+                            sampler_i2i_to_index['euler']),
                         batch_size=p.batch_size,
                         cfg_scale=p.cfg_scale,
                         restore_faces=upscale_restore_faces,
