@@ -122,8 +122,11 @@ def webui():
 
     signal.signal(signal.SIGINT, sigint_handler)
 
-    while 1:
+    if cmd_opts.upnp:
+        from modules.upnp import map_local
+        threading.Thread(target=map_local, args=(cmd_opts.upnp,), daemon=True).start()
 
+    while 1:
         demo = modules.ui.create_ui(wrap_gradio_gpu_call=wrap_gradio_gpu_call)
 
         app, local_url, share_url = demo.launch(
