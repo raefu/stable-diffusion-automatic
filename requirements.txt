@@ -24,4 +24,5 @@ torchdiffeq
 kornia
 msgpack
 grpcio
+miniupnpc
 lark
