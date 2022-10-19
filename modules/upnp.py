@@ -13,7 +13,7 @@ def map_local(port):
 
             # addportmapping(external-port, protocol, internal-host, internal-port, description, remote-host)
             upnp.addportmapping(port, 'TCP', upnp.lanaddr, port, 'StableDiffusion', '')
-            print("added upnp port mapping", port)
+            print(f"added upnp port mapping, forwarding {upnp.externalipaddress()}:{port}")
         except Exception:
             print("failed to map upnp")
             traceback.print_exc()
